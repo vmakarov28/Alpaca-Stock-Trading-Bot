@@ -1,0 +1,2 @@
+#Enter into CMD to install dependent librarys
+pip install tensorflow alpaca-trade-api pandas numpy ta-lib tqdm yfinance transformers colorama scikit-learn
