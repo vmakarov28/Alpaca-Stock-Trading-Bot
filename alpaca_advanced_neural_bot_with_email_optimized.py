@@ -1,1188 +1,1035 @@
+# =============================================================================
+# Alpaca Advanced Neural Bot with Email Notifications
+# =============================================================================
+#
+# Description:
+# ------------
+# This script implements an advanced trading bot that uses deep learning (LSTM
+# neural networks) to predict stock price movements and execute backtest
+# simulations. It fetches historical stock data from the Alpaca API, calculates
+# over 25 technical indicators, incorporates news sentiment using FinBERT
+# (placeholder), trains LSTM models per stock, and performs backtesting with
+# configurable trading logic. Results are logged to trades.log and emailed,
+# including per-symbol performance metrics (total return, annualized return,
+# Sharpe ratio, max drawdown, trade counts, win rates).
+#
+# Key Features:
+# -------------
+# - Configurable via CONFIG dictionary for symbols, timeframe, cash, thresholds.
+# - Supports multiple stocks (e.g., TSLA, NVDA) with independent models.
+# - Fetches 15-minute bar data (configurable) from Alpaca API with tenacity retries.
+# - Calculates indicators (MA20, MA50, RSI, MACD, Bollinger Bands, etc.).
+# - Trains LSTM models with error handling and StandardScaler normalization.
+# - Backtests with buy (>0.6) and sell (<0.4 or ATR-based stop-loss/take-profit).
+# - Supports --backtest mode using pre-trained models, with training fallback.
+# - Logs detailed info (data fetching, training, trades) to trades.log.
+# - Emails formatted results with per-symbol metrics and trade statistics.
+# - Includes performance metrics (Sharpe ratio, max drawdown).
+# - Handles errors, skipping failed symbols and logging issues.
+# - Caches sentiment data with 24-hour expiry.
+#
+# Usage:
+# ------
+# 1. Set up a virtual environment (recommended to avoid dependency conflicts):
+#    ```bash
+#    python -m venv venv
+#    source venv/bin/activate  # On Windows: venv\Scripts\activate
+#    ```
+# 2. Install dependencies in the active environment:
+#    ```bash
+#    python -m pip install tensorflow numpy pandas alpaca-py transformers scikit-learn ta-lib tenacity
+#    ```
+#    For ta-lib on Ubuntu:
+#    ```bash
+#    sudo apt-get install libta-lib0 libta-lib0-dev
+#    python -m pip install ta-lib
+#    ```
+# 3. Configure API and email in CONFIG dictionary:
+#    - Set ALPACA_API_KEY, ALPACA_SECRET_KEY (Alpaca paper trading).
+#    - Set EMAIL_SENDER, EMAIL_PASSWORD, EMAIL_RECEIVER (e.g., Gmail App Password).
+# 4. Modify CONFIG as needed (e.g., SYMBOLS=['AAPL', 'MSFT'], TIMEFRAME_INTERVAL='1H').
+# 5. Run the script in the same environment:
+#    - Full run (training + backtest):
+#      ```bash
+#      python alpaca_advanced_neural_bot_with_email_optimized.py
+#      ```
+#    - Backtest-only mode (requires pre-trained models in cache):
+#      ```bash
+#      python alpaca_advanced_neural_bot_with_email_optimized.py --backtest
+#      ```
+#
+# Dependencies:
+# -------------
+# - tensorflow: Deep learning for LSTM models.
+# - numpy, pandas: Data manipulation and analysis.
+# - alpaca-py: Alpaca API for market data.
+# - transformers: FinBERT for sentiment (placeholder).
+# - scikit-learn: StandardScaler for normalization.
+# - ta-lib: Technical indicators (MA, RSI, MACD, etc.).
+# - tenacity: Retry logic for API calls.
+# - smtplib: Email notifications.
+# - argparse, time, warnings: Argument parsing, timing, warning suppression.
+#
+# Installation:
+# ------------
+# Ensure dependencies are installed in the same Python environment as the script:
+# ```bash
+# python -m pip install tensorflow numpy pandas alpaca-py transformers scikit-learn ta-lib tenacity
+# ```
+# If you encounter a ModuleNotFoundError, verify the Python environment:
+# - Check Python version: `python --version` (must be 3.10+).
+# - Check pip environment: `pip --version` (should match Python path).
+# - Use `python -m pip install <package>` to install in the correct environment.
+#
+# Configuration:
+# --------------
+# Edit CONFIG dictionary:
+# - SYMBOLS: List of stock symbols (e.g., ['TSLA', 'NVDA']).
+# - TIMEFRAME: Alpaca TimeFrame (e.g., TimeFrame.Minute).
+# - TIMEFRAME_INTERVAL: Interval for Minute (e.g., '15Min').
+# - INITIAL_CASH: Starting cash (e.g., 1000.0).
+# - TRAIN_EPOCHS, BATCH_SIZE: Training parameters (e.g., 15, 32).
+# - STOP_LOSS_MULTIPLIER, TAKE_PROFIT_MULTIPLIER: ATR exits (e.g., 1.5, 2.0).
+# - PREDICTION_THRESHOLD_BUY, PREDICTION_THRESHOLD_SELL: Trade thresholds (e.g., 0.6, 0.4).
+# - CACHE_DIR: Model/sentiment cache directory (e.g., './cache').
+# - CACHE_EXPIRY_SECONDS: Cache expiry (e.g., 24 hours).
+#
+# Notes:
+# ------
+# - Ensure valid Alpaca API credentials and internet connectivity.
+# - Backtest-only mode requires pre-trained models (run without --backtest first).
+# - FinBERT sentiment is a placeholder (0.2); replace with news processing for production.
+# - Performance depends on hardware; GPU recommended for TensorFlow.
+# - Logs saved to trades.log; check for errors or trade details.
+# - Email requires correct SMTP settings; use Gmail App Password.
+# - If ModuleNotFoundError persists, verify Python environment consistency.
+#
+# Author: Grok 3, built by xAI
+# Date: May 14, 2025
+# Version: 1.2
+# =============================================================================
+
 import os
 import sys
 import logging
+import argparse
+import importlib
 import numpy as np
 import pandas as pd
-import talib
-from datetime import datetime, timedelta
-from alpaca_trade_api.rest import REST, TimeFrame
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.model_selection import train_test_split
-from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
-from tensorflow.keras.layers import Layer
-from keras.saving import register_keras_serializable
-from tqdm import tqdm
-import time
-import yfinance as yf
-from concurrent.futures import ThreadPoolExecutor
-import pickle
-import logging.handlers
-import queue
-import threading
-from random import uniform
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense, Dropout
+from tensorflow.keras import backend as K
+from alpaca.data import StockHistoricalDataClient, TimeFrame
+from alpaca.data.requests import StockBarsRequest
 from transformers import pipeline
-from colorama import init, Fore
+from sklearn.preprocessing import StandardScaler
 import smtplib
 from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-import argparse
-from contextlib import contextmanager
-import traceback
+from datetime import datetime, timedelta
+import talib
+import pickle
+from typing import List, Tuple, Dict, Optional
+import warnings
+import time
+from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
 
-# Set environment variables before any imports
-os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+# Suppress TensorFlow warnings
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+warnings.filterwarnings('ignore', category=UserWarning)
 
-import tensorflow as tf
-tf.get_logger().setLevel('FATAL')
-os.environ["TF_XLA_FLAGS"] = "--tf_xla_cpu_global_jit"
-tf.config.threading.set_inter_op_parallelism_threads(4)
-tf.config.threading.set_intra_op_parallelism_threads(4)
+# Configuration variables (modify these as needed)
+CONFIG = {
+    'SYMBOLS': ['TSLA', 'NVDA'],  # List of stock symbols to process
+    'TIMEFRAME': TimeFrame.Minute,  # Alpaca TimeFrame (Minute, Hour, Day)
+    'TIMEFRAME_INTERVAL': '15Min',  # Interval for Minute timeframe (e.g., '1Min', '5Min', '15Min')
+    'NUM_BARS': 10000,  # Number of bars to fetch
+    'TRAIN_EPOCHS': 25,  # Number of training epochs
+    'BATCH_SIZE': 32,  # Training batch size
+    'INITIAL_CASH': 100000.0,  # Initial cash for backtesting
+    'STOP_LOSS_MULTIPLIER': 1.5,  # Stop-loss multiplier for ATR-based exits
+    'TAKE_PROFIT_MULTIPLIER': 2.0,  # Take-profit multiplier for ATR-based exits
+    'TIMESTEPS': 30,  # Number of timesteps for input sequences
+    'MIN_DATA_POINTS': 100,  # Minimum number of bars required
+    'CACHE_DIR': './cache',  # Directory for cached data/models
+    'CACHE_EXPIRY_SECONDS': 24 * 60 * 60,  # Cache expiry (24 hours)
+    'ALPACA_API_KEY': 'PKN7X4X2GEUK7LJTMVU8',  # Alpaca API key
+    'ALPACA_SECRET_KEY': 'd8mEV3OqhfEYG1cT4CC6JJbjJ3sbimeglSKchBa0',  # Alpaca secret key
+    'EMAIL_SENDER': 'alpaca.ai.tradingbot@gmail.com',  # Email sender address
+    'EMAIL_PASSWORD': 'hjdf sstp pyne rotq',  # Email app password
+    'EMAIL_RECEIVER': 'aiplane.scientist@gmail.com',  # Email receiver address
+    'SMTP_SERVER': 'smtp.gmail.com',  # SMTP server
+    'SMTP_PORT': 587,  # SMTP port
+    'LOG_FILE': 'trades.log',  # Log file name
+    'API_RETRY_ATTEMPTS': 3,  # Number of retries for API calls
+    'API_RETRY_DELAY': 1000,  # Delay between retries in milliseconds
+    'PREDICTION_THRESHOLD_BUY': 0.6,  # Prediction threshold for buy
+    'PREDICTION_THRESHOLD_SELL': 0.4  # Prediction threshold for sell
+}
 
-# Initialize colorama
-init(autoreset=True)
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(CONFIG['LOG_FILE']),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
-# Define thread-safe locks
-print_lock = threading.Lock()
-state_lock = threading.Lock()
-
-# Logging filters
-class SuppressTFWarnings(logging.Filter):
-    def filter(self, record):
-        return not any(phrase in record.getMessage() for phrase in [
-            "sparse_softmax_cross_entropy is deprecated",
-            "The name tf.losses",
-            "oneDNN custom operations",
-            "optimized to use available CPU instructions"
-        ])
-
-def suppress_child_process_logs(record):
-    return not hasattr(record, 'processName') or record.processName == 'MainProcess'
-
-# Set up asynchronous logging
-log_queue = queue.Queue()
-debug_queue = queue.Queue()
-queue_handler = logging.handlers.QueueHandler(log_queue)
-debug_queue_handler = logging.handlers.QueueHandler(debug_queue)
-file_handler = logging.handlers.TimedRotatingFileHandler("trades.log", when="midnight", backupCount=7)
-debug_file_handler = logging.handlers.TimedRotatingFileHandler("debug.log", when="midnight", backupCount=7)
-formatter = logging.Formatter("%(asctime)s - %(message)s")
-file_handler.setFormatter(formatter)
-debug_file_handler.setFormatter(formatter)
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-logger.handlers = []
-logger.addHandler(queue_handler)
-logger.addFilter(SuppressTFWarnings())
-logger.addFilter(suppress_child_process_logs)
-debug_logger = logging.getLogger('debug')
-debug_logger.setLevel(logging.DEBUG)
-debug_logger.handlers = []
-debug_logger.addHandler(debug_queue_handler)
-debug_logger.addFilter(SuppressTFWarnings())
-debug_logger.addFilter(suppress_child_process_logs)
-
-def log_listener():
-    while True:
-        try:
-            record = log_queue.get()
-            if record is None:
-                break
-            file_handler.handle(record)
-        except Exception as e:
-            with print_lock:
-                print(f"Log listener error: {e}", flush=True)
-
-def debug_log_listener():
-    while True:
-        try:
-            record = debug_queue.get()
-            if record is None:
-                break
-            debug_file_handler.handle(record)
-        except Exception as e:
-            with print_lock:
-                print(f"Debug log listener error: {e}", flush=True)
-
-listener_thread = threading.Thread(target=log_listener, daemon=True)
-debug_listener_thread = threading.Thread(target=debug_log_listener, daemon=True)
-listener_thread.start()
-debug_listener_thread.start()
-
-# Alpaca API credentials
-API_KEY = "PKQ7UFDXCQF7QDM95LTE"
-API_SECRET = "njYD7jxxnT7lSF8cGTfBDuecSI5juARfi21IN8et"
-BASE_URL = "https://paper-api.alpaca.markets"
-
-# Trading parameters
-SYMBOLS = ["TSLA", "NVDA"]
-TRAIN_TIMEFRAME = "15Min"
-TRADE_TIMEFRAME = "15Min"
-TRAIN_DAYS = 365
-TRADE_DAYS = 20  # Increased from 10 to 20 for more backtest data
-LOOKBACK = 30
-INITIAL_CASH = 1000.0
-CASH_PER_STOCK = INITIAL_CASH / len(SYMBOLS)
-MAX_POSITION_SIZE = 0.9 / len(SYMBOLS)
-DATA_CACHE = "data_cache"
-MODEL_CACHE = "model_cache"
-STATE_FILE = "state.pkl"
-CONFIDENCE_THRESHOLD = 0.4  # Lowered from 0.5 to 0.4 to allow more trades
-PORTFOLIO_STOP_LOSS = 0.10
-EPOCHS_PER_STOCK = 15
-BATCH_SIZE = 256
-
-# Email configuration
-EMAIL_SENDER = "alpaca.ai.tradingbot@gmail.com"
-EMAIL_PASSWORD = "hjdf sstp pyne rotq"
-EMAIL_RECIPIENT = ["aiplane.scientist@gmail.com", "tchaikovskiy@hotmail.com", "evmakarov.md@gmail.com"]
-SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT = 587
-EMAIL_INTERVAL = 300
-
-# Initialize Alpaca API
-api = REST(API_KEY, API_SECRET, BASE_URL, api_version="v2")
-
-# Track last portfolio email time
-last_portfolio_email_time = 0
-
-# Custom Attention Layer
-@register_keras_serializable()
-class Attention(Layer):
-    def __init__(self, **kwargs):
-        super(Attention, self).__init__(**kwargs)
-
-    def build(self, input_shape):
-        self.W = self.add_weight(name='attention_weight', shape=(input_shape[-1], 1),
-                                 initializer='random_normal', trainable=True)
-        self.b = self.add_weight(name='attention_bias', shape=(input_shape[1], 1),
-                                 initializer='zeros', trainable=True)
-        super(Attention, self).build(input_shape)
-
-    def call(self, inputs):
-        e = tf.keras.backend.tanh(tf.keras.backend.dot(inputs, self.W) + self.b)
-        alpha = tf.keras.backend.softmax(e, axis=1)
-        context = inputs * alpha
-        return tf.keras.backend.sum(context, axis=1)
-
-    def get_config(self):
-        config = super(Attention, self).get_config()
-        return config
-
-def load_state():
+def check_dependencies() -> None:
+    """
+    Check for required Python modules and raise an error if any are missing.
+    
+    Logs the Python executable and site-packages paths for debugging environment issues.
+    
+    Raises:
+        ImportError: If a required module is not installed, with installation instructions.
+    """
     try:
-        cash = {symbol: CASH_PER_STOCK for symbol in SYMBOLS}
-        positions = {symbol: 0 for symbol in SYMBOLS}
-        stop_loss_multipliers = {symbol: 1.0 for symbol in SYMBOLS}
+        # Log Python environment for debugging
+        logger.info(f"Python executable: {sys.executable}")
+        logger.info(f"Python version: {sys.version}")
+        logger.info(f"Site-packages: {sys.path}")
         
-        if os.path.exists(STATE_FILE):
-            with state_lock:
-                with open(STATE_FILE, "rb") as f:
-                    saved_state = pickle.load(f)
-                    cash.update(saved_state.get("cash", {}))
-                    positions.update(saved_state.get("positions", {}))
-                    stop_loss_multipliers.update(saved_state.get("stop_loss_multipliers", {}))
-            logging.info("Loaded state from file.")
-            with print_lock:
-                print("Loaded state from file.", flush=True)
+        # Check Python version (3.10+ required)
+        if sys.version_info < (3, 10):
+            raise RuntimeError("Python 3.10 or higher is required")
         
-        try:
-            account = api.get_account()
-            alpaca_cash = float(account.cash)
-            alpaca_positions = api.list_positions()
-            alpaca_position_qty = {pos.symbol: int(pos.qty) for pos in alpaca_positions}
-            
-            for symbol in SYMBOLS:
-                positions[symbol] = alpaca_position_qty.get(symbol, positions[symbol])
-            
-            total_cash = alpaca_cash
-            for symbol in SYMBOLS:
-                if positions[symbol] > 0:
-                    bars = api.get_bars(symbol, TimeFrame.Minute, limit=1).df
-                    if not bars.empty:
-                        current_price = bars["close"].iloc[-1]
-                        total_cash += positions[symbol] * current_price
-                cash[symbol] = total_cash / len(SYMBOLS)
-            logging.info("Synced state with Alpaca portfolio.")
-            with print_lock:
-                print("Synced state with Alpaca portfolio.", flush=True)
-        except Exception as e:
-            logging.error(f"Error syncing with Alpaca: {e}. Using file state.")
-            with print_lock:
-                print(f"Error syncing with Alpaca: {e}. Using file state.", flush=True)
+        # List of required modules
+        required_modules = [
+            'tensorflow', 'numpy', 'pandas', 'alpaca_trade_api', 'transformers',
+            'sklearn', 'talib', 'tenacity', 'smtplib', 'argparse'
+        ]
         
-        return cash, positions, stop_loss_multipliers
-    except Exception as e:
-        logging.error(f"Error loading state: {e}. Using default state.")
-        with print_lock:
-            print(f"Error loading state: {e}. Using default state.", flush=True)
-        return ({symbol: CASH_PER_STOCK for symbol in SYMBOLS},
-                {symbol: 0 for symbol in SYMBOLS},
-                {symbol: 1.0 for symbol in SYMBOLS})
-
-def save_state(cash, positions, stop_loss_multipliers):
-    try:
-        state = {
-            "cash": cash,
-            "positions": positions,
-            "stop_loss_multipliers": stop_loss_multipliers
-        }
-        with state_lock:
-            with open(STATE_FILE, "wb") as f:
-                pickle.dump(state, f)
-        logging.info("Saved state to file.")
-        with print_lock:
-            print("Saved state to file.", flush=True)
-    except Exception as e:
-        logging.error(f"Error saving state: {e}")
-        with print_lock:
-            print(f"Error saving state: {e}", flush=True)
-
-def format_time_delta(seconds):
-    if seconds < 0:
-        return "Unknown"
-    hours = int(seconds // 3600)
-    minutes = int((seconds % 3600) // 60)
-    seconds = int(seconds % 60)
-    parts = []
-    if hours > 0:
-        parts.append(f"{hours}h")
-    if minutes > 0 or hours > 0:
-        parts.append(f"{minutes}m")
-    parts.append(f"{seconds}s")
-    return f"{Fore.RED}{' '.join(parts)}{Fore.RESET}"
-
-def send_email(subject, body, retry_attempts=3, retry_delay=5):
-    msg = MIMEMultipart()
-    msg['From'] = EMAIL_SENDER
-    msg['To'] = ", ".join(EMAIL_RECIPIENT)
-    msg['Subject'] = subject
-    msg.attach(MIMEText(body, 'plain'))
-
-    for attempt in range(retry_attempts):
-        try:
-            server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=10)
-            server.starttls()
-            server.login(EMAIL_SENDER, EMAIL_PASSWORD)
-            server.sendmail(EMAIL_SENDER, EMAIL_RECIPIENT, msg.as_string())
-            server.quit()
-            logging.info(f"Email sent: Subject: {subject} to {', '.join(EMAIL_RECIPIENT)}")
-            with print_lock:
-                print(f"Email sent: Subject: {subject} to {', '.join(EMAIL_RECIPIENT)}", flush=True)
-            return True
-        except Exception as e:
-            logging.error(f"Email attempt {attempt+1}/{retry_attempts} failed: {e}")
-            with print_lock:
-                print(f"Email attempt {attempt+1}/{retry_attempts} failed: {e}", flush=True)
-            if attempt < retry_attempts - 1:
-                time.sleep(retry_delay * (2 ** attempt) + uniform(0, 0.5))
-    logging.error(f"Failed to send email after {retry_attempts} attempts: Subject: {subject}")
-    with print_lock:
-        print(f"Failed to send email after {retry_attempts} attempts: Subject: {subject}", flush=True)
-    return False
-
-def check_market_open():
-    for attempt in range(3):
-        try:
-            clock = api.get_clock()
-            if clock.is_open:
-                logging.info("Market is open.")
-                with print_lock:
-                    print("Market is open.", flush=True)
-                return True, 0, None
-            next_open = clock.next_open
-            seconds_until_open = (next_open - datetime.now().astimezone()).total_seconds()
-            if seconds_until_open < 0:
-                logging.warning(f"Negative seconds_until_open: {seconds_until_open}. Setting to 300 seconds.")
-                with print_lock:
-                    print(f"Negative seconds_until_open: {seconds_until_open}. Setting to 300 seconds.", flush=True)
-                seconds_until_open = 300
-            sleep_time = max(60, seconds_until_open - 60) if seconds_until_open > 60 else 300
-            time_until_open = format_time_delta(seconds_until_open)
-            logging.info(f"Market is closed. Next open: {next_open}. Waiting {sleep_time:.0f} seconds.")
-            return False, sleep_time, next_open
-        except Exception as e:
-            logging.error(f"Error checking market status on attempt {attempt+1}: {e}")
-            with print_lock:
-                print(f"Error checking market status on attempt {attempt+1}: {e}", flush=True)
-            if attempt == 2:
-                logging.warning("Failed to check market status after 3 attempts. Assuming market is closed.")
-                with print_lock:
-                    print("Failed to check market status after 3 attempts. Assuming market is closed.", flush=True)
-                return False, 300, datetime.now().astimezone() + timedelta(seconds=300)
-            time.sleep(2 ** attempt + uniform(0, 1))
-
-def get_stock_data(symbol, timeframe, days, feed="iex"):
-    cache_file = f"{DATA_CACHE}/{symbol}_{timeframe}_{days}.pkl"
-    news_cache_file = f"{DATA_CACHE}/{symbol}_news_{days}.pkl"
-    os.makedirs(DATA_CACHE, exist_ok=True)
-    output_messages = []
-    try:
-        # Force fresh data fetch for TSLA to avoid cache issues
-        if symbol == "TSLA" and os.path.exists(cache_file):
-            os.remove(cache_file)
-            logging.info(f"Deleted cached data for {symbol} to fetch fresh data.")
-            output_messages.append(f"Deleted cached data for {symbol} to fetch fresh data.")
-        
-        if os.path.exists(cache_file) and (time.time() - os.path.getmtime(cache_file)) > 24*3600:
-            logging.info(f"Cache for {symbol} is stale. Fetching fresh data.")
-            output_messages.append(f"Cache for {symbol} is stale. Fetching fresh data.")
-            data = pd.DataFrame()
-        elif os.path.exists(cache_file):
+        # Check each module
+        for module in required_modules:
             try:
-                with open(cache_file, "rb") as f:
-                    data = pickle.load(f)
-                if not isinstance(data, pd.DataFrame) or data.empty:
-                    raise ValueError("Invalid or empty cache data")
-                logging.info(f"Loaded {len(data)} bars for {symbol} with timeframe {timeframe} from cache")
-                output_messages.append(f"Loaded {len(data)} bars for {symbol} from cache.")
-            except Exception as e:
-                logging.warning(f"Cache load failed for {symbol}: {e}. Fetching fresh data.")
-                output_messages.append(f"Cache load failed for {symbol}: {e}. Fetching fresh data.")
-                data = pd.DataFrame()
-        else:
-            data = pd.DataFrame()
+                importlib.import_module(module)
+                logger.debug(f"Module {module} is installed")
+            except ImportError:
+                raise ImportError(
+                    f"The '{module}' module is required. "
+                    f"Please install it using: python -m pip install {module} "
+                    f"in the same Python environment ({sys.executable})."
+                )
+        logger.info("All required dependencies are installed")
+    except Exception as e:
+        logger.error(f"Dependency check failed: {str(e)}")
+        raise
+
+def validate_config(config: Dict) -> None:
+    """
+    Validate configuration parameters to ensure correctness.
+    
+    Args:
+        config (Dict): Configuration dictionary containing bot settings.
+    
+    Raises:
+        ValueError: If any configuration parameter is invalid.
+    """
+    try:
+        # Validate symbol list
+        if not config['SYMBOLS']:
+            raise ValueError("SYMBOLS list cannot be empty")
         
-        if data.empty:
-            end = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-            start = end - timedelta(days=days)
-            for attempt in range(3):
-                try:
-                    time.sleep(0.5)
-                    data = api.get_bars(
-                        symbol,
-                        timeframe,
-                        start=start.strftime("%Y-%m-%d"),
-                        end=end.strftime("%Y-%m-%d"),
-                        feed=feed
-                    ).df
-                    if data.empty:
-                        logging.warning(f"No data fetched for {symbol} with timeframe {timeframe} on attempt {attempt+1}")
-                        output_messages.append(f"No data fetched for {symbol} with timeframe {timeframe} on attempt {attempt+1}")
-                        if attempt == 2:
-                            break
-                        time.sleep(2 ** attempt + uniform(0, 0.5))
-                        continue
-                    logging.info(f"Fetched {len(data)} bars for {symbol} with timeframe {timeframe} from Alpaca")
-                    output_messages.append(f"Fetched {len(data)} bars for {symbol} from Alpaca.")
-                    with open(cache_file, "wb") as f:
-                        pickle.dump(data, f)
-                    break
-                except Exception as e:
-                    logging.error(f"Error fetching data for {symbol} on attempt {attempt+1}: {e}")
-                    output_messages.append(f"Error fetching data for {symbol} on attempt {attempt+1}: {e}")
-                    if attempt == 2:
-                        break
-                    time.sleep(2 ** attempt + uniform(0, 0.5))
+        # Validate timeframe
+        if not isinstance(config['TIMEFRAME'], TimeFrame):
+            raise ValueError("TIMEFRAME must be a valid TimeFrame enum (e.g., TimeFrame.Minute)")
+        
+        # Validate timeframe interval for Minute timeframe
+        valid_intervals = ['1Min', '5Min', '15Min']
+        if config['TIMEFRAME'] == TimeFrame.Minute and config['TIMEFRAME_INTERVAL'] not in valid_intervals:
+            raise ValueError(
+                f"TIMEFRAME_INTERVAL must be one of {valid_intervals} for TimeFrame.Minute"
+            )
+        
+        # Validate integer parameters
+        for param, value in [
+            ('NUM_BARS', config['NUM_BARS']),
+            ('TRAIN_EPOCHS', config['TRAIN_EPOCHS']),
+            ('BATCH_SIZE', config['BATCH_SIZE']),
+            ('TIMESTEPS', config['TIMESTEPS']),
+            ('MIN_DATA_POINTS', config['MIN_DATA_POINTS']),
+            ('API_RETRY_ATTEMPTS', config['API_RETRY_ATTEMPTS']),
+            ('API_RETRY_DELAY', config['API_RETRY_DELAY']),
+            ('CACHE_EXPIRY_SECONDS', config['CACHE_EXPIRY_SECONDS'])
+        ]:
+            if not isinstance(value, int) or value <= 0:
+                raise ValueError(f"{param} must be a positive integer")
+        
+        # Validate float parameters
+        for param, value in [
+            ('INITIAL_CASH', config['INITIAL_CASH']),
+            ('STOP_LOSS_MULTIPLIER', config['STOP_LOSS_MULTIPLIER']),
+            ('TAKE_PROFIT_MULTIPLIER', config['TAKE_PROFIT_MULTIPLIER']),
+            ('PREDICTION_THRESHOLD_BUY', config['PREDICTION_THRESHOLD_BUY']),
+            ('PREDICTION_THRESHOLD_SELL', config['PREDICTION_THRESHOLD_SELL'])
+        ]:
+            if not isinstance(value, (int, float)) or value <= 0:
+                raise ValueError(f"{param} must be a positive number")
+        
+        # Ensure sell threshold is less than buy threshold
+        if config['PREDICTION_THRESHOLD_SELL'] >= config['PREDICTION_THRESHOLD_BUY']:
+            raise ValueError("PREDICTION_THRESHOLD_SELL must be less than PREDICTION_THRESHOLD_BUY")
+        
+        # Validate symbol strings
+        if not all(isinstance(s, str) for s in config['SYMBOLS']):
+            raise ValueError("All SYMBOLS must be strings")
+        
+        # Validate timestep constraints
+        if config['TIMESTEPS'] >= config['NUM_BARS']:
+            raise ValueError("TIMESTEPS must be less than NUM_BARS")
+        
+        # Validate minimum data points
+        if config['MIN_DATA_POINTS'] > config['NUM_BARS']:
+            raise ValueError("MIN_DATA_POINTS must be less than or equal to NUM_BARS")
+        
+        logger.info("Configuration validated successfully")
+    except Exception as e:
+        logger.error(f"Configuration validation failed: {str(e)}")
+        raise
+
+def create_cache_directory() -> None:
+    """
+    Create cache directory if it doesn't exist.
+    
+    Raises:
+        OSError: If directory creation fails.
+    """
+    try:
+        os.makedirs(CONFIG['CACHE_DIR'], exist_ok=True)
+        logger.info(f"Cache directory ensured: {CONFIG['CACHE_DIR']}")
+    except OSError as e:
+        logger.error(f"Failed to create cache directory: {str(e)}. Ensure write permissions.")
+        raise
+
+@retry(
+    stop=stop_after_attempt(CONFIG['API_RETRY_ATTEMPTS']),
+    wait=wait_fixed(CONFIG['API_RETRY_DELAY'] / 1000),
+    retry=retry_if_exception_type(Exception)
+)
+def fetch_data(symbol: str, timeframe: TimeFrame, interval: str, num_bars: int) -> pd.DataFrame:
+    """
+    Fetch historical bar data from Alpaca API with retry logic.
+    
+    Args:
+        symbol (str): Stock symbol (e.g., 'TSLA').
+        timeframe (TimeFrame): Alpaca timeframe enum (e.g., TimeFrame.Minute).
+        interval (str): Timeframe interval (e.g., '15Min' for Minute timeframe).
+        num_bars (int): Number of bars to fetch.
+    
+    Returns:
+        pd.DataFrame: DataFrame with historical bar data (OHLCV, timestamp).
+    
+    Raises:
+        ValueError: If insufficient data is fetched.
+        Exception: If API call fails after retries.
+    """
+    try:
+        client = StockHistoricalDataClient(CONFIG['ALPACA_API_KEY'], CONFIG['ALPACA_SECRET_KEY'])
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=365)
+        request = StockBarsRequest(
+            symbol_or_symbols=symbol,
+            timeframe=timeframe,
+            start=start_date,
+            end=end_date,
+            limit=num_bars
+        )
+        bars = client.get_stock_bars(request).df
+        if len(bars) < CONFIG['MIN_DATA_POINTS']:
+            raise ValueError(
+                f"Insufficient data for {symbol}: got {len(bars)} bars, need {CONFIG['MIN_DATA_POINTS']}"
+            )
+        logger.info(f"Fetched {len(bars)} bars for {symbol} with timeframe {timeframe} ({interval})")
+        return bars.reset_index()
+    except Exception as e:
+        logger.error(f"Error fetching data for {symbol}: {str(e)}")
+        raise
+
+def load_news_sentiment(symbol: str) -> float:
+    """
+    Load or compute news sentiment using FinBERT (placeholder).
+    
+    Args:
+        symbol (str): Stock symbol.
+    
+    Returns:
+        float: Sentiment score (0 to 1).
+    
+    Raises:
+        Exception: If sentiment computation or caching fails.
+    """
+    cache_file = os.path.join(CONFIG['CACHE_DIR'], f"{symbol}_news_sentiment.pkl")
+    try:
+        # Check if cache exists and is not expired
+        if os.path.exists(cache_file):
+            file_mtime = os.path.getmtime(cache_file)
+            if (time.time() - file_mtime) < CONFIG['CACHE_EXPIRY_SECONDS']:
+                with open(cache_file, 'rb') as f:
+                    sentiment = pickle.load(f)
+                logger.info(f"Loaded news sentiment for {symbol} from cache: {sentiment:.3f}")
+                return sentiment
+        
+        # Compute sentiment (placeholder)
+        try:
+            sentiment_analyzer = pipeline("sentiment-analysis", model="ProsusAI/finbert")
+            # Assume news data is fetched; return dummy sentiment
+            sentiment = 0.2
+        except Exception as e:
+            logger.warning(f"FinBERT failed for {symbol}: {str(e)}. Using default sentiment: 0.2")
+            sentiment = 0.2
+        
+        # Cache sentiment
+        with open(cache_file, 'wb') as f:
+            pickle.dump(sentiment, f)
+        logger.info(f"Computed and cached news sentiment for {symbol}: {sentiment:.3f}")
+        return sentiment
+    except Exception as e:
+        logger.error(f"Error loading news sentiment for {symbol}: {str(e)}")
+        return 0.0
+
+def calculate_indicators(df: pd.DataFrame, sentiment: float) -> pd.DataFrame:
+    """
+    Calculate technical indicators and add sentiment score to the DataFrame.
+    
+    Args:
+        df (pd.DataFrame): Input DataFrame with OHLCV data.
+        sentiment (float): Sentiment score to include as a feature.
+    
+    Returns:
+        pd.DataFrame: DataFrame with calculated indicators (MA20, RSI, etc.).
+    
+    Raises:
+        ValueError: If required columns are missing.
+        Exception: If indicator calculation fails.
+    """
+    try:
+        df = df.copy()
+        required_cols = ['open', 'high', 'low', 'close', 'volume']
+        if not all(col in df.columns for col in required_cols):
+            raise ValueError(f"Missing required columns: {required_cols}")
+        
+        # Calculate basic indicators
+        df['MA20'] = talib.SMA(df['close'], timeperiod=20)
+        df['MA50'] = talib.SMA(df['close'], timeperiod=50)
+        df['RSI'] = talib.RSI(df['close'], timeperiod=14)
+        df['MACD'], df['MACD_signal'], _ = talib.MACD(df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
+        df['OBV'] = talib.OBV(df['close'], df['volume'])
+        df['VWAP'] = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum()
+        df['ATR'] = talib.ATR(df['high'], df['low'], df['close'], timeperiod=14)
+        df['CMF'] = talib.AD(df['high'], df['low'], df['close'], df['volume']) / df['volume'].rolling(20).sum()
+        
+        # Calculate additional indicators
+        df['Close_ATR'] = df['close'] / df['ATR']
+        df['MA20_ATR'] = df['MA20'] / df['ATR']
+        df['Return_1d'] = df['close'].pct_change()
+        df['Return_5d'] = df['close'].pct_change(periods=5)
+        df['Volatility'] = df['close'].rolling(20).std()
+        df['BB_upper'], df['BB_middle'], df['BB_lower'] = talib.BBANDS(
+            df['close'], timeperiod=20, nbdevup=2, nbdevdn=2
+        )
+        df['Stoch_K'], df['Stoch_D'] = talib.STOCH(
+            df['high'], df['low'], df['close'], fastk_period=14, slowk_period=3, slowd_period=3
+        )
+        df['ADX'] = talib.ADX(df['high'], df['low'], df['close'], timeperiod=14)
+        df['Sentiment'] = sentiment
+        df['Trend'] = np.where(df['close'] > df['MA20'], 1, 0)
+        
+        # Log NaN counts for debugging
+        nan_counts = df.isna().sum().to_dict()
+        logger.info(f"Indicators calculated for shape: {df.shape}, NaN counts: {nan_counts}")
+        return df
+    except Exception as e:
+        logger.error(f"Error calculating indicators: {str(e)}")
+        raise
+
+def validate_data(df: pd.DataFrame, symbol: str) -> None:
+    """
+    Validate DataFrame for NaNs, infinities, and sufficient data.
+    
+    Args:
+        df (pd.DataFrame): Input DataFrame to validate.
+        symbol (str): Stock symbol for error reporting.
+    
+    Raises:
+        ValueError: If data validation fails (e.g., NaNs, insufficient rows).
+    """
+    try:
+        if df.empty:
+            raise ValueError(f"Empty DataFrame for {symbol}")
+        required_cols = ['open', 'high', 'low', 'close', 'volume', 'timestamp']
+        if not all(col in df.columns for col in required_cols):
+            raise ValueError(f"Missing required columns for {symbol}: {required_cols}")
+        if df[required_cols[:-1]].isna().any().any():
+            raise ValueError(f"NaN values in OHLCV columns for {symbol}")
+        if np.any(np.isinf(df[required_cols[:-1]].values)):
+            raise ValueError(f"Infinite values in OHLCV columns for {symbol}")
+        if len(df) < CONFIG['MIN_DATA_POINTS']:
+            raise ValueError(
+                f"Insufficient data for {symbol}: got {len(df)} bars, need {CONFIG['MIN_DATA_POINTS']}"
+            )
+        logger.info(f"Data validated for {symbol}: {len(df)} bars")
+    except Exception as e:
+        logger.error(f"Data validation failed for {symbol}: {str(e)}")
+        raise
+
+def preprocess_data(df: pd.DataFrame, timesteps: int) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Preprocess data for model input by creating sequences.
+    
+    Args:
+        df (pd.DataFrame): Input DataFrame with indicators.
+        timesteps (int): Number of timesteps for sequences.
+    
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: Features (X) and labels (y) as numpy arrays.
+    
+    Raises:
+        ValueError: If preprocessing fails (e.g., missing features, invalid sequences).
+    """
+    try:
+        df = df.copy()
+        # Fill NaNs to ensure data integrity
+        df.fillna(method='ffill', inplace=True)
+        df.fillna(0, inplace=True)
+        logger.info(f"After filling NaNs, data shape: {df.shape}")
+        
+        # Define features for model input
+        features = [
+            'close', 'high', 'low', 'volume', 'vwap', 'MA20', 'MA50', 'RSI',
+            'MACD', 'MACD_signal', 'OBV', 'VWAP', 'ATR', 'CMF', 'Close_ATR',
+            'MA20_ATR', 'Return_1d', 'Return_5d', 'Volatility', 'BB_upper',
+            'BB_lower', 'Stoch_K', 'Stoch_D', 'ADX', 'Sentiment'
+        ]
+        if not all(f in df.columns for f in features):
+            missing = [f for f in features if f not in df.columns]
+            raise ValueError(f"Missing features for preprocessing: {missing}")
+        
+        # Extract feature values and labels
+        X = df[features].values
+        y = df['Trend'].values
+        
+        # Create sequences for LSTM input
+        X_seq = []
+        y_seq = []
+        for i in range(timesteps, len(X)):
+            X_seq.append(X[i-timesteps:i])
+            y_seq.append(y[i])
+        X_seq = np.array(X_seq)
+        y_seq = np.array(y_seq)
+        
+        # Validate sequences
+        if X_seq.shape[0] == 0:
+            raise ValueError("No valid sequences generated after preprocessing")
+        if np.any(np.isnan(X_seq)) or np.any(np.isinf(X_seq)):
+            raise ValueError("NaN or Inf values detected in preprocessed data")
+        
+        logger.info(f"Preprocessed features: X shape: {X_seq.shape}, y shape: {y_seq.shape}")
+        return X_seq, y_seq
+    except Exception as e:
+        logger.error(f"Error preprocessing data: {str(e)}")
+        raise
+
+def build_model(input_shape: Tuple[int, int]) -> tf.keras.Model:
+    """
+    Build and compile a neural network model for trading predictions.
+    
+    Args:
+        input_shape (Tuple[int, int]): Shape of input data (timesteps, features).
+    
+    Returns:
+        tf.keras.Model: Compiled Keras LSTM model.
+    
+    Raises:
+        ValueError: If model creation fails (e.g., None model object).
+        Exception: If compilation fails.
+    """
+    try:
+        # Clear any existing TensorFlow session to prevent state issues
+        K.clear_session()
+        
+        # Use explicit name scope to avoid Keras context errors
+        with tf.name_scope("trading_model"):
+            model = Sequential([
+                LSTM(64, input_shape=input_shape, return_sequences=True),
+                Dropout(0.2),
+                LSTM(32),
+                Dropout(0.2),
+                Dense(16, activation='relu'),
+                Dense(1, activation='sigmoid')
+            ])
             
-            if data.empty:
-                logging.info(f"Falling back to yfinance for {symbol} with timeframe {timeframe}")
-                output_messages.append(f"Falling back to yfinance for {symbol}.")
-                interval = "1d" if timeframe == "1Day" else "15m"
-                data = yf.download(symbol, start=start, end=end, interval=interval)
-                if data.empty:
-                    logging.error(f"No data fetched for {symbol} with timeframe {timeframe} from yfinance")
-                    output_messages.append(f"No data fetched for {symbol} from yfinance.")
-                    return pd.DataFrame(), [], output_messages
-                data = data.rename(columns={
-                    "Open": "open",
-                    "High": "high",
-                    "Low": "low",
-                    "Close": "close",
-                    "Volume": "volume"
-                })
-                with open(cache_file, "wb") as f:
-                    pickle.dump(data, f)
-        
-        # Validate data columns
-        required_columns = ['open', 'high', 'low', 'close', 'volume']
-        if not all(col in data.columns for col in required_columns):
-            logging.error(f"Missing required columns in data for {symbol}: {data.columns}")
-            output_messages.append(f"Missing required columns in data for {symbol}: {data.columns}")
-            return pd.DataFrame(), [], output_messages
-        
-        news_data = []
-        if os.path.exists(news_cache_file):
-            try:
-                with open(news_cache_file, "rb") as f:
-                    news_data = pickle.load(f)
-                logging.info(f"Loaded news data for {symbol} from cache")
-                output_messages.append(f"Loaded news data for {symbol} from cache.")
-            except Exception as e:
-                logging.warning(f"News cache load failed for {symbol}: {e}. Fetching fresh news.")
-                output_messages.append(f"News cache load failed for {symbol}: {e}. Fetching fresh news.")
-        if not news_data:
-            try:
-                time.sleep(0.5)
-                end = datetime.now()
-                start = end - timedelta(days=days)
-                news = api.get_news(symbol, start=start.strftime("%Y-%m-%d"), end=end.strftime("%Y-%m-%d"))
-                news_data = [{"headline": n.headline, "summary": n.summary, "timestamp": n.created_at} for n in news]
-                with open(news_cache_file, "wb") as f:
-                    pickle.dump(news_data, f)
-                logging.info(f"Fetched {len(news_data)} news items for {symbol} from Alpaca")
-                output_messages.append(f"Fetched {len(news_data)} news items for {symbol} from Alpaca.")
-            except Exception as e:
-                logging.error(f"Error fetching news for {symbol}: {e}")
-                output_messages.append(f"Error fetching news for {symbol}: {e}")
-        
-        return data, news_data, output_messages
+            # Verify model creation
+            if model is None:
+                raise ValueError("Model creation failed: Model object is None")
+            
+            # Compile model with adam optimizer and binary crossentropy loss
+            model.compile(
+                optimizer='adam',
+                loss='binary_crossentropy',
+                metrics=['accuracy'],
+                jit_compile=False  # Disable XLA to avoid backend issues
+            )
+            
+            logger.info(f"Model built successfully with input shape {input_shape}")
+            return model
     except Exception as e:
-        logging.error(f"Error in get_stock_data for {symbol}: {e}")
-        output_messages.append(f"Error in get_stock_data for {symbol}: {e}")
-        return pd.DataFrame(), [], output_messages
-
-def calculate_sentiment(news_data, sentiment_analyzer):
-    try:
-        if not news_data or not sentiment_analyzer:
-            logging.warning("No news data or sentiment analyzer available. Using neutral sentiment (0.0).")
-            return 0.0, ["No news data or sentiment analyzer available. Using neutral sentiment (0.0)."]
-        
-        sentiments = []
-        for item in news_data:
-            text = (item.get("headline", "") + " " + item.get("summary", "")).strip()
-            if text:
-                result = sentiment_analyzer(text)[0]
-                if result['label'] == 'positive':
-                    score = result['score']
-                elif result['label'] == 'negative':
-                    score = -result['score']
-                else:
-                    score = 0.0
-                sentiments.append(score)
-        
-        sentiment_score = np.mean(sentiments) if sentiments else 0.0
-        logging.info(f"Calculated sentiment score: {sentiment_score:.3f}")
-        return sentiment_score, [f"Calculated sentiment score: {sentiment_score:.3f}"]
-    except Exception as e:
-        logging.error(f"Error calculating sentiment: {e}. Using neutral sentiment (0.0).")
-        return 0.0, [f"Error calculating sentiment: {e}. Using neutral sentiment (0.0)."]
-
-def calculate_indicators(data, timeframe, sentiment_score):
-    try:
-        if data.empty:
-            raise ValueError("Empty data provided for indicator calculation")
-        debug_logger.debug(f"Calculating indicators for timeframe {timeframe}, data shape: {data.shape}")
-        data = data.copy()
-        data['MA20'] = talib.SMA(data['close'], timeperiod=20)
-        data['RSI'] = talib.RSI(data['close'], timeperiod=14)
-        macd, signal, _ = talib.MACD(data['close'], fastperiod=12, slowperiod=26, signalperiod=9)
-        data['MACD'] = macd
-        data['MACD_signal'] = signal
-        data['OBV'] = talib.OBV(data['close'], data['volume'])
-        data['VWAP'] = (data['close'] * data['volume']).cumsum() / data['volume'].cumsum()
-        data['ATR'] = talib.ATR(data['high'], data['low'], data['close'], timeperiod=14)
-        denominator = data['high'] - data['low']
-        data['CMF'] = np.where(denominator != 0,
-                              ((data['close'] - data['low']) - (data['high'] - data['close'])) / denominator * data['volume'],
-                              0.0)
-        data['CMF'] = data['CMF'].rolling(20).sum() / data['volume'].rolling(20).sum()
-        data['Close_ATR'] = data['close'] / data['ATR']
-        data['MA20_ATR'] = data['MA20'] / data['ATR']
-        data['Return_1d'] = data['close'].pct_change(1)
-        data['Return_5d'] = data['close'].pct_change(5)
-        data['Sentiment'] = sentiment_score
-        data['Trend'] = np.where(data['close'] > data['MA20'], 1, 
-                               np.where(data['close'] < data['MA20'], -1, 0))
-        
-        debug_logger.debug(f"Indicators calculated, data shape: {data.shape}, NaN counts: {data.isna().sum().to_dict()}")
-        return data
-    except Exception as e:
-        logging.error(f"Error calculating indicators: {e}")
-        return pd.DataFrame()
-
-def train_stop_loss(data):
-    try:
-        if data.empty or 'ATR' not in data or 'close' not in data:
-            return 1.0, ["No data for stop-loss calculation. Using default multiplier: 1.0"]
-        
-        returns = data['close'].pct_change().dropna()
-        atr = data['ATR'].dropna()
-        volatility = returns.std()
-        historical_vol = returns.rolling(20).std().dropna()
-        if volatility > historical_vol.quantile(0.7):
-            multiplier = 1.5
-        else:
-            multiplier = 1.0
-        
-        logging.info(f"Calculated stop-loss multiplier: {multiplier:.2f}")
-        return multiplier, [f"Calculated stop-loss multiplier: {multiplier:.2f}"]
-    except Exception as e:
-        logging.error(f"Error training stop-loss: {e}")
-        return 1.0, [f"Error training stop-loss: {e}"]
-
-def process_chunk(chunk, lookback, batch_size, augment):
-    try:
-        features = chunk[['close', 'volume', 'MA20', 'RSI', 'MACD', 'MACD_signal', 'OBV', 'VWAP',
-                         'ATR', 'CMF', 'Close_ATR', 'MA20_ATR', 'Return_1d', 'Return_5d', 'Sentiment', 'Trend']].copy()
-        features = features.ffill().bfill().dropna()
-        if len(features) <= lookback:
-            debug_logger.debug(f"Chunk too small for preprocessing: {len(features)} < {lookback}")
-            return None, None
-        X, y = [], []
-        for i in range(lookback, len(features), batch_size):
-            batch_end = min(i + batch_size, len(features))
-            X_batch = np.array([features.iloc[j-lookback:j].values for j in range(i, batch_end)], dtype=np.float32)
-            if augment:
-                noise = np.random.normal(0, 0.01, X_batch[:, :, [0, 2, 7, 10, 11]].shape)
-                X_batch[:, :, [0, 2, 7, 10, 11]] += noise
-            y_batch = np.array([1 if features['close'].iloc[j] > features['close'].iloc[j-1] else 0 
-                              for j in range(i, batch_end)], dtype=np.int32)
-            X.append(X_batch)
-            y.append(y_batch)
-        if not X:
-            return None, None
-        return np.concatenate(X), np.concatenate(y)
-    except Exception as e:
-        debug_logger.debug(f"Error in process_chunk: {e}")
-        return None, None
-
-def preprocess_data(data, batch_size=256, augment=False):
-    try:
-        if data.empty:
-            raise ValueError("Empty data provided for preprocessing")
-        debug_logger.debug(f"Before filling NaNs, data shape: {data.shape}")
-        
-        # Validate required columns
-        required_columns = ['close', 'volume', 'MA20', 'RSI', 'MACD', 'MACD_signal', 'OBV', 'VWAP',
-                            'ATR', 'CMF', 'Close_ATR', 'MA20_ATR', 'Return_1d', 'Return_5d', 'Sentiment', 'Trend']
-        if not all(col in data.columns for col in required_columns):
-            missing_cols = [col for col in required_columns if col not in data.columns]
-            raise ValueError(f"Missing columns in data: {missing_cols}")
-        
-        # Process data sequentially
-        features = data[required_columns].copy()
-        features = features.ffill().bfill().dropna()
-        if len(features) <= LOOKBACK:
-            logging.error(f"Data too small for preprocessing: {len(features)} < {LOOKBACK}")
-            return None, None, [f"Data too small for preprocessing: {len(features)} < {LOOKBACK}"]
-        
-        X, y = [], []
-        for i in range(LOOKBACK, len(features), batch_size):
-            batch_end = min(i + batch_size, len(features))
-            X_batch = np.array([features.iloc[j-LOOKBACK:j].values for j in range(i, batch_end)], dtype=np.float32)
-            if augment:
-                noise = np.random.normal(0, 0.01, X_batch[:, :, [0, 2, 7, 10, 11]].shape)
-                X_batch[:, :, [0, 2, 7, 10, 11]] += noise
-            y_batch = np.array([1 if features['close'].iloc[j] > features['close'].iloc[j-1] else 0 
-                              for j in range(i, batch_end)], dtype=np.int32)
-            X.append(X_batch)
-            y.append(y_batch)
-        
-        if not X or not y:
-            logging.error("No valid sequences generated after preprocessing")
-            return None, None, ["No valid sequences generated after preprocessing"]
-        
-        X = np.concatenate(X)
-        y = np.concatenate(y)
-        debug_logger.debug(f"Preprocessed features shape for {data.name if hasattr(data, 'name') else 'unknown'}: X shape: {X.shape}, y shape: {y.shape}")
-        return X, y, []
-    except Exception as e:
-        logging.error(f"Error preprocessing data: {e}")
-        return None, None, [f"Error preprocessing data: {e}"]
-
-def create_dataset(X, y, batch_size=BATCH_SIZE):
-    dataset = tf.data.Dataset.from_tensor_slices((X, y))
-    dataset = dataset.cache().shuffle(1000).batch(batch_size).prefetch(tf.data.AUTOTUNE)
-    return dataset
-
-def build_model(input_shape):
-    try:
+        logger.error(f"Error building model: {str(e)}")
+        raise
+    finally:
+        # Ensure session is cleared to prevent memory leaks
         tf.keras.backend.clear_session()
-        inputs = tf.keras.layers.Input(shape=input_shape)
-        x = tf.keras.layers.Conv1D(filters=64, kernel_size=3, activation='relu', padding='same')(inputs)
-        x = tf.keras.layers.MaxPooling1D(pool_size=2)(x)
-        x = tf.keras.layers.Dropout(0.3)(x)
-        x = tf.keras.layers.LSTM(16, return_sequences=True)(x)  # Reduced from 32 to 16
-        x = tf.keras.layers.Dropout(0.3)(x)
-        x = Attention()(x)
-        x = tf.keras.layers.Dense(8, activation='relu')(x)
-        outputs = tf.keras.layers.Dense(1, activation='sigmoid')(x)
-        model = tf.keras.Model(inputs, outputs)
-        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'], jit_compile=True)
-        return model
-    except Exception as e:
-        logging.error(f"Error building model: {str(e)}")
-        debug_logger.debug(f"Full error traceback: {traceback.format_exc()}")
-        return None
 
-@contextmanager
-def progress_update(progress_bar, progress_lock):
-    with progress_lock:
-        yield
-        progress_bar.update(1)
-
-def train_model(symbol, progress_bar, progress_lock, sentiment_analyzer):
-    output_messages = []
+def train_model(symbol: str, X: np.ndarray, y: np.ndarray, epochs: int, batch_size: int) -> Tuple[tf.keras.Model, StandardScaler]:
+    """
+    Train and save the model for a given symbol.
+    
+    Args:
+        symbol (str): Stock symbol.
+        X (np.ndarray): Input features (sequences).
+        y (np.ndarray): Target labels (trend).
+        epochs (int): Number of training epochs.
+        batch_size (int): Training batch size.
+    
+    Returns:
+        Tuple[tf.keras.Model, StandardScaler]: Trained model and fitted scaler.
+    
+    Raises:
+        Exception: If training or saving fails.
+    """
     try:
-        model_file = f"{MODEL_CACHE}/{symbol}_model.h5"
-        scaler_file = f"{MODEL_CACHE}/{symbol}_scaler.pkl"
-        os.makedirs(MODEL_CACHE, exist_ok=True)
+        # Scale input features
+        scaler = StandardScaler()
+        X_flat = X.reshape(-1, X.shape[-1])
+        X_scaled = scaler.fit_transform(X_flat).reshape(X.shape)
         
-        # Force retraining for TSLA by deleting cached model/scaler
-        if symbol == "TSLA":
-            if os.path.exists(model_file):
-                os.remove(model_file)
-                logging.info(f"Deleted cached model for {symbol} to force retraining.")
-                output_messages.append(f"Deleted cached model for {symbol} to force retraining.")
-            if os.path.exists(scaler_file):
-                os.remove(scaler_file)
-                logging.info(f"Deleted cached scaler for {symbol} to force retraining.")
-                output_messages.append(f"Deleted cached scaler for {symbol} to force retraining.")
+        # Build the LSTM model
+        model = build_model(input_shape=(X.shape[1], X.shape[2]))
         
-        model, scaler = None, None
-        if os.path.exists(model_file) and os.path.exists(scaler_file):
-            try:
-                model = tf.keras.models.load_model(model_file, custom_objects={'Attention': Attention})
-                if not callable(getattr(model, 'predict', None)):
-                    raise ValueError("Invalid model: missing predict method")
-                with open(scaler_file, "rb") as f:
-                    scaler = pickle.load(f)
-                if not isinstance(scaler, MinMaxScaler):
-                    raise ValueError("Invalid scaler object")
-                logging.info(f"Loaded cached model and scaler for {symbol}")
-                output_messages.append(f"Loaded cached model and scaler for {symbol}.")
-            except Exception as e:
-                logging.warning(f"Invalid cache for {symbol}: {e}. Training new model.")
-                output_messages.append(f"Invalid cache for {symbol}: {e}. Training new model.")
-                model, scaler = None, None
-        else:
-            output_messages.append(f"No cached model for {symbol}. Training new model.")
-        
-        raw_data, news_data, data_messages = get_stock_data(symbol, TRAIN_TIMEFRAME, TRAIN_DAYS)
-        output_messages.extend(data_messages)
-        if raw_data.empty:
-            logging.error(f"No training data available for {symbol}")
-            output_messages.append(f"No training data available for {symbol}.")
-            return None, None, 1.0, output_messages
-        
-        sentiment_score, sentiment_messages = calculate_sentiment(news_data, sentiment_analyzer)
-        output_messages.extend(sentiment_messages)
-        data = calculate_indicators(raw_data, TRAIN_TIMEFRAME, sentiment_score)
-        if data.empty:
-            logging.error(f"Failed to calculate indicators for {symbol}")
-            output_messages.append(f"Failed to calculate indicators for {symbol}.")
-            return None, None, 1.0, output_messages
-        
-        stop_loss_multiplier, stop_loss_messages = train_stop_loss(data)
-        output_messages.extend(stop_loss_messages)
-        
-        X, y, preprocess_messages = preprocess_data(data, batch_size=BATCH_SIZE, augment=True)
-        output_messages.extend(preprocess_messages)
-        if X is None or y is None:
-            logging.error(f"Failed to preprocess data for {symbol}")
-            output_messages.append(f"Failed to preprocess data for {symbol}.")
-            return None, None, stop_loss_multiplier, output_messages
-        
-        X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
-        scaler = MinMaxScaler()
-        X_train = scaler.fit_transform(X_train.reshape(-1, X_train.shape[-1])).reshape(X_train.shape)
-        X_val = scaler.transform(X_val.reshape(-1, X_val.shape[-1])).reshape(X_val.shape)
-        model = build_model((X_train.shape[1], X_train.shape[2]))
-        if model is None:
-            logging.error(f"Failed to build model for {symbol}")
-            output_messages.append(f"Failed to build model for {symbol}.")
-            return None, None, stop_loss_multiplier, output_messages
-        
-        train_dataset = create_dataset(X_train, y_train, BATCH_SIZE)
-        val_dataset = create_dataset(X_val, y_val, BATCH_SIZE)
-        early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
-        lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-5)
-        epochs = EPOCHS_PER_STOCK
+        # Train the model
         start_time = time.time()
-        
-        for epoch in range(epochs):
-            try:
-                model.fit(
-                    train_dataset,
-                    validation_data=val_dataset,
-                    epochs=1,
-                    verbose=0,
-                    callbacks=[early_stopping, lr_scheduler]
+        model.fit(
+            X_scaled, y,
+            epochs=epochs,
+            batch_size=batch_size,
+            verbose=0,
+            callbacks=[tf.keras.callbacks.LambdaCallback(
+                on_epoch_end=lambda epoch, logs: logger.info(
+                    f"Epoch {epoch+1}/{epochs} for {symbol}, loss: {logs['loss']:.4f}, "
+                    f"accuracy: {logs['accuracy']:.4f}, time: {(time.time() - start_time):.2f}s"
                 )
-                with progress_update(progress_bar, progress_lock):
-                    pass
-                elapsed_time = time.time() - start_time
-                debug_logger.debug(f"Epoch {epoch+1}/{epochs} for {symbol}, elapsed time: {elapsed_time:.2f}s")
-            except Exception as e:
-                logging.error(f"Training failed for {symbol} at epoch {epoch+1}: {e}")
-                output_messages.append(f"Training failed at epoch {epoch+1}: {e}")
-                return None, None, stop_loss_multiplier, output_messages
+            )]
+        )
         
-        try:
-            model.save(model_file)
-            with open(scaler_file, "wb") as f:
-                pickle.dump(scaler, f)
-            logging.info(f"Saved model and scaler for {symbol}")
-            output_messages.append(f"Saved model and scaler for {symbol}.")
-        except Exception as e:
-            logging.error(f"Failed to save model/scaler for {symbol}: {e}")
-            output_messages.append(f"Failed to save model/scaler: {e}")
+        # Save model and scaler to cache
+        model_path = os.path.join(CONFIG['CACHE_DIR'], f"{symbol}_model.keras")
+        scaler_path = os.path.join(CONFIG['CACHE_DIR'], f"{symbol}_scaler.pkl")
+        model.save(model_path)
+        with open(scaler_path, 'wb') as f:
+            pickle.dump(scaler, f)
         
-        if model is None or scaler is None:
-            logging.error(f"Training failed for {symbol}: model or scaler is None")
-            output_messages.append(f"Training failed for {symbol}: model or scaler is None")
-            return None, None, stop_loss_multiplier, output_messages
-        
-        return model, scaler, stop_loss_multiplier, output_messages
+        logger.info(f"Saved model and scaler for {symbol}")
+        return model, scaler
     except Exception as e:
-        logging.error(f"Error training model for {symbol}: {e}")
-        output_messages.append(f"Error training model for {symbol}: {e}")
-        send_email(
-            subject=f"Training Error: {symbol}",
-            body=f"Error training model for {symbol}:\n"
-                 f"Message: {e}\n"
-                 f"Skipping training for this symbol."
-        )
-        return None, None, 1.0, output_messages
+        logger.error(f"Failed to train model for {symbol}: {str(e)}")
+        raise
 
-def predict_signal(model, scaler, data, sentiment_score):
+def load_model_and_scaler(symbol: str) -> Tuple[tf.keras.Model, StandardScaler]:
+    """
+    Load pre-trained model and scaler for a symbol.
+    
+    Args:
+        symbol (str): Stock symbol.
+    
+    Returns:
+        Tuple[tf.keras.Model, StandardScaler]: Loaded model and scaler.
+    
+    Raises:
+        FileNotFoundError: If model or scaler file is missing.
+        Exception: If loading fails.
+    """
     try:
-        if data.empty:
-            raise ValueError("No data available for prediction")
-        features = calculate_indicators(data, TRADE_TIMEFRAME, sentiment_score)
-        if features.empty:
-            return None, None, ["Failed to calculate indicators for prediction"]
-        X, _, preprocess_messages = preprocess_data(features)
-        if X is None:
-            return None, None, preprocess_messages
-        if X.shape[1:] != (LOOKBACK, len(features.columns)):
-            logging.error(f"Invalid input shape for prediction: {X.shape}")
-            return None, None, [f"Invalid input shape for prediction: {X.shape}"]
-        X = scaler.transform(X.reshape(-1, X.shape[-1])).reshape(X.shape)
-        try:
-            prediction = model.predict(X[-1].reshape(1, LOOKBACK, -1), verbose=0)
-        except Exception as e:
-            logging.error(f"Prediction failed: {e}")
-            return None, None, [f"Prediction failed: {e}"]
-        confidence = prediction[0][0]
-        return True, confidence, []
+        model_path = os.path.join(CONFIG['CACHE_DIR'], f"{symbol}_model.keras")
+        scaler_path = os.path.join(CONFIG['CACHE_DIR'], f"{symbol}_scaler.pkl")
+        if not os.path.exists(model_path) or not os.path.exists(scaler_path):
+            raise FileNotFoundError(
+                f"Model or scaler not found for {symbol}. "
+                f"Ensure {model_path} and {scaler_path} exist."
+            )
+        model = tf.keras.models.load_model(model_path)
+        with open(scaler_path, 'rb') as f:
+            scaler = pickle.load(f)
+        logger.info(f"Loaded model and scaler for {symbol}")
+        return model, scaler
     except Exception as e:
-        logging.error(f"Error predicting signal: {e}")
-        return None, None, [f"Error predicting signal: {e}"]
+        logger.error(f"Error loading model/scaler for {symbol}: {str(e)}")
+        raise
 
-def trading_strategy(sentiment_analyzer):
-    global last_portfolio_email_time
+def calculate_performance_metrics(returns: List[float], cash: float, initial_cash: float) -> Dict[str, float]:
+    """
+    Calculate performance metrics for backtest results.
+    
+    Args:
+        returns (List[float]): List of trade returns.
+        cash (float): Final cash balance.
+        initial_cash (float): Initial cash balance.
+    
+    Returns:
+        Dict[str, float]: Performance metrics (total return, Sharpe ratio, etc.).
+    
+    Raises:
+        Exception: If metric calculation fails.
+    """
     try:
-        models = {}
-        scalers = {}
-        stop_loss_multipliers = {}
-        cash, positions, stop_loss_multipliers = load_state()
-        initial_portfolio_value = sum(cash.values()) + sum(
-            positions[symbol] * get_stock_data(symbol, TRADE_TIMEFRAME, 1)[0]["close"].iloc[-1]
-            for symbol in SYMBOLS if positions[symbol] > 0
+        returns = np.array(returns)
+        metrics = {}
+        
+        # Calculate total return
+        metrics['total_return'] = (cash - initial_cash) / initial_cash * 100
+        
+        # Calculate annualized return (assuming 252 trading days)
+        if len(returns) > 0:
+            metrics['annualized_return'] = (
+                (1 + metrics['total_return'] / 100) ** (252 / len(returns)) - 1
+            ) * 100
+        else:
+            metrics['annualized_return'] = 0.0
+        
+        # Calculate Sharpe ratio (assuming risk-free rate = 0)
+        if len(returns) > 1 and np.std(returns) > 0:
+            metrics['sharpe_ratio'] = np.mean(returns) / np.std(returns) * np.sqrt(252)
+        else:
+            metrics['sharpe_ratio'] = 0.0
+        
+        # Calculate maximum drawdown
+        cumulative = np.cumprod(1 + np.array(returns))
+        peak = np.maximum.accumulate(cumulative)
+        drawdown = (peak - cumulative) / peak
+        metrics['max_drawdown'] = np.max(drawdown) * 100 if len(drawdown) > 0 else 0.0
+        
+        # Round metrics to 3 decimal places
+        return {k: round(v, 3) for k, v in metrics.items()}
+    except Exception as e:
+        logger.error(f"Error calculating performance metrics: {str(e)}")
+        return {'total_return': 0.0, 'annualized_return': 0.0, 'sharpe_ratio': 0.0, 'max_drawdown': 0.0}
+
+def backtest(
+    symbol: str,
+    model: tf.keras.Model,
+    scaler: StandardScaler,
+    df: pd.DataFrame,
+    initial_cash: float,
+    stop_loss_multiplier: float,
+    take_profit_multiplier: float,
+    timesteps: int,
+    buy_threshold: float,
+    sell_threshold: float
+) -> Tuple[float, List[float], int, float]:
+    """
+    Run backtest simulation with trading logic.
+    
+    Args:
+        symbol (str): Stock symbol.
+        model (tf.keras.Model): Trained LSTM model.
+        scaler (StandardScaler): Fitted scaler for features.
+        df (pd.DataFrame): DataFrame with indicators.
+        initial_cash (float): Initial cash per symbol.
+        stop_loss_multiplier (float): ATR multiplier for stop-loss.
+        take_profit_multiplier (float): ATR multiplier for take-profit.
+        timesteps (int): Number of timesteps for sequences.
+        buy_threshold (float): Prediction threshold for buying.
+        sell_threshold (float): Prediction threshold for selling.
+    
+    Returns:
+        Tuple[float, List[float], int, float]: Final cash, list of returns, trade count, win rate.
+    
+    Raises:
+        Exception: If backtest fails.
+    """
+    try:
+        # Preprocess data for predictions
+        X, _ = preprocess_data(df, timesteps)
+        X_flat = X.reshape(-1, X.shape[-1])
+        X_scaled = scaler.transform(X_flat).reshape(X.shape)
+        
+        # Generate predictions
+        predictions = model.predict(X_scaled, verbose=0).flatten()
+        logger.info(
+            f"Predictions for {symbol}: mean={predictions.mean():.3f}, "
+            f"std={predictions.std():.3f}, min={predictions.min():.3f}, max={predictions.max():.3f}"
         )
         
-        os.system('cls' if os.name == 'nt' else 'clear')
-        with print_lock:
-            print("Starting model training for all stocks...", flush=True)
+        # Initialize trading variables
+        cash = initial_cash / len(CONFIG['SYMBOLS'])
+        position = 0
+        entry_price = 0.0
+        returns = []
+        trade_count = 0
+        winning_trades = 0
+        atr = df['ATR'].iloc[-len(predictions):].values
+        prices = df['close'].iloc[-len(predictions):].values
+        timestamps = df['timestamp'].iloc[-len(predictions):].values
         
-        total_epochs = EPOCHS_PER_STOCK * len(SYMBOLS)
-        progress_lock = threading.Lock()
-        symbol_outputs = {}
-        with tqdm(total=total_epochs, desc="Training All Stocks", 
-                  bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
-                  colour="green", leave=True) as progress_bar:
-            with ThreadPoolExecutor(max_workers=min(len(SYMBOLS), 2)) as executor:
-                futures = {executor.submit(train_model, symbol, progress_bar, progress_lock, sentiment_analyzer): symbol for symbol in SYMBOLS}
-                for future in futures:
-                    symbol = futures[future]
-                    try:
-                        model, scaler, multiplier, messages = future.result()
-                        models[symbol] = model
-                        scalers[symbol] = scaler
-                        stop_loss_multipliers[symbol] = multiplier
-                        symbol_outputs[symbol] = messages
-                        if model is None or scaler is None:
-                            logging.warning(f"Skipping {symbol} due to training failure")
-                            symbol_outputs[symbol].append(f"Skipping {symbol} due to training failure.")
-                    except Exception as e:
-                        logging.error(f"Error training {symbol}: {e}")
-                        symbol_outputs[symbol] = symbol_outputs.get(symbol, []) + [f"Error training {symbol}: {e}"]
-        
-        progress_bar.close()
-        
-        with print_lock:
-            for symbol in SYMBOLS:
-                print(f"{Fore.LIGHTBLUE_EX}\nTraining {symbol}:{Fore.RESET}")
-                for msg in symbol_outputs.get(symbol, []):
-                    print(f"  {msg}")
-        
-        successful_models = sum(1 for symbol in SYMBOLS if models.get(symbol) is not None)
-        email_body = f"Training completed for {len(SYMBOLS)} stocks.\n"
-        email_body += f"Successful models: {successful_models}/{len(SYMBOLS)}\n\n"
-        for symbol in SYMBOLS:
-            email_body += f"{symbol}:\n"
-            for msg in symbol_outputs.get(symbol, []):
-                email_body += f"  {msg}\n"
-        send_email(
-            subject="Training Completed",
-            body=email_body
-        )
-        
-        with print_lock:
-            print("\nTraining complete. Starting trading...", flush=True)
-        
-        while True:
-            try:
-                with print_lock:
-                    print("\nChecking market status...", flush=True)
-                is_open, sleep_time, next_open = check_market_open()
-                if not is_open:
-                    while sleep_time > 0:
-                        current_time = datetime.now().astimezone()
-                        seconds_remaining = (next_open - current_time).total_seconds()
-                        if seconds_remaining <= 0:
-                            break
-                        time_until_open = format_time_delta(seconds_remaining)
-                        with print_lock:
-                            print(f"Market is closed. Opens in {time_until_open}.", 
-                                  end='\r', flush=True)
-                        time.sleep(1)
-                        sleep_time -= 1
-                    with print_lock:
-                        print(" " * 80, end='\r', flush=True)
-                    continue
+        # Execute trading logic
+        for i, (pred, price, atr_val, ts) in enumerate(zip(predictions, prices, atr, timestamps)):
+            qty = int(cash / price) if cash >= price else 0
+            
+            # Buy logic: Enter position if prediction exceeds buy threshold
+            if pred > buy_threshold and position == 0 and qty > 0:
+                position = qty
+                entry_price = price
+                cash -= qty * price
+                logger.info(
+                    f"{ts}: Bought {qty} shares of {symbol} at ${price:.2f}, "
+                    f"cash: ${cash:.2f}, position: {position}"
+                )
+            
+            # Sell logic: Exit position based on stop-loss, take-profit, or sell threshold
+            elif position > 0:
+                stop_loss = entry_price - stop_loss_multiplier * atr_val
+                take_profit = entry_price + take_profit_multiplier * atr_val
                 
-                data_list = [get_stock_data(s, TRADE_TIMEFRAME, TRADE_DAYS) for s in SYMBOLS]
-                
-                total_cash = sum(cash.values())
-                portfolio_value = total_cash
-                for symbol, (data, news_data, data_messages) in zip(SYMBOLS, data_list):
-                    if models[symbol] is None or data.empty:
-                        logging.warning(f"Skipping {symbol} due to missing model or data")
-                        with print_lock:
-                            print(f"Skipping {symbol} due to missing model or data.", flush=True)
-                        continue
-                    current_price = round(data["close"].iloc[-1], 2)
-                    if positions[symbol] > 0:
-                        portfolio_value += positions[symbol] * current_price
-                    
-                    if portfolio_value < initial_portfolio_value * (1 - PORTFOLIO_STOP_LOSS):
-                        logging.warning("Portfolio stop-loss triggered. Pausing trading.")
-                        with print_lock:
-                            print("Portfolio stop-loss triggered. Pausing trading.", flush=True)
-                        send_email(
-                            subject="Portfolio Stop-Loss Triggered",
-                            body=f"Portfolio stop-loss triggered:\n"
-                                 f"Portfolio Value: ${portfolio_value:.2f}\n"
-                                 f"Initial Value: ${initial_portfolio_value:.2f}\n"
-                                 f"Stop-Loss Threshold: {PORTFOLIO_STOP_LOSS*100:.1f}%\n"
-                                 f"Trading paused."
-                        )
-                        return
-                    
-                    sentiment_score, sentiment_messages = calculate_sentiment(news_data, sentiment_analyzer)
-                    signal, confidence, signal_messages = predict_signal(models[symbol], scalers[symbol], data, sentiment_score)
-                    if signal is None:
-                        with print_lock:
-                            print(f"{symbol} - No signal generated, skipping...", flush=True)
-                        continue
-                    signal_type = 'Buy' if confidence > 0.5 else 'Sell' if confidence < 0.5 else 'Hold'
-                    with print_lock:
-                        print(f"{symbol} - Price: {current_price:.2f}, Signal: {signal_type}, "
-                              f"Confidence: {confidence:.2f}, Sentiment: {sentiment_score:.2f}, "
-                              f"Cash: {cash[symbol]:.2f}, Position: {positions[symbol]}", flush=True)
-                    
-                    atr = data['ATR'].iloc[-1] if 'ATR' in data else 1.0
-                    position_size = min(cash[symbol] * MAX_POSITION_SIZE, cash[symbol]) / (atr + 1e-6)
-                    qty = int(position_size // current_price)
-                    if qty == 0:
-                        logging.info(f"Zero quantity calculated for {symbol}: position_size={position_size:.2f}, price={current_price:.2f}")
-                        with print_lock:
-                            print(f"Zero quantity for {symbol}, skipping order.", flush=True)
-                        continue
-                    
-                    stop_loss_multiplier = stop_loss_multipliers.get(symbol, 1.0)
-                    stop_loss_price = round(current_price * (1 - 0.05 * stop_loss_multiplier), 2)
-                    take_profit_price = round(current_price * 1.10, 2)
-                    
-                    open_orders = api.list_orders(status='open', symbols=[symbol])
-                    has_open_buy = any(order.side == 'buy' for order in open_orders)
-                    has_open_sell = any(order.side == 'sell' for order in open_orders)
-                    
-                    if (confidence > CONFIDENCE_THRESHOLD and cash[symbol] >= current_price and 
-                        positions[symbol] == 0 and qty > 0 and not has_open_buy):
-                        stop_loss = {"stop_price": stop_loss_price}
-                        take_profit = {"limit_price": take_profit_price}
-                        api.submit_order(
-                            symbol=symbol,
-                            qty=qty,
-                            side="buy",
-                            type="market",
-                            time_in_force="gtc",
-                            order_class="bracket",
-                            stop_loss=stop_loss,
-                            take_profit=take_profit
-                        )
-                        positions[symbol] += qty
-                        cash[symbol] -= qty * current_price
-                        logging.info(f"Buy signal: {symbol} at {current_price:.2f}, Qty: {qty}, "
-                                    f"Confidence: {confidence:.2f}, Stop-Loss: {stop_loss_price:.2f}, Take-Profit: {take_profit_price:.2f}")
-                        with print_lock:
-                            print(f"Buy signal: {symbol} at {current_price:.2f}, Qty: {qty}, "
-                                  f"Confidence: {confidence:.2f}, Stop-Loss: {stop_loss_price:.2f}, Take-Profit: {take_profit_price:.2f}", flush=True)
-                        send_email(
-                            subject=f"Buy Order Executed: {symbol}",
-                            body=f"Buy signal for {symbol}:\n"
-                                 f"Price: ${current_price:.2f}\n"
-                                 f"Quantity: {qty}\n"
-                                 f"Confidence: {confidence:.2f}\n"
-                                 f"Stop-Loss: ${stop_loss_price:.2f}\n"
-                                 f"Take-Profit: ${take_profit_price:.2f}\n"
-                                 f"Cash remaining for {symbol}: ${cash[symbol]:.2f}\n"
-                                 f"Sentiment: {sentiment_score:.2f}"
-                        )
-                    elif confidence < CONFIDENCE_THRESHOLD and positions[symbol] > 0 and not has_open_sell:
-                        api.submit_order(
-                            symbol=symbol,
-                            qty=positions[symbol],
-                            side="sell",
-                            type="market",
-                            time_in_force="gtc"
-                        )
-                        cash[symbol] += positions[symbol] * current_price
-                        positions[symbol] = 0
-                        logging.info(f"Sell signal: {symbol} at {current_price:.2f}, Confidence: {confidence:.2f}")
-                        with print_lock:
-                            print(f"Sell signal: {symbol} at {current_price:.2f}, Confidence: {confidence:.2f}", flush=True)
-                        send_email(
-                            subject=f"Sell Order Executed: {symbol}",
-                            body=f"Sell signal for {symbol}:\n"
-                                 f"Price: ${current_price:.2f}\n"
-                                 f"Quantity: {positions[symbol]}\n"
-                                 f"Confidence: {confidence:.2f}\n"
-                                 f"Cash after sale for {symbol}: ${cash[symbol]:.2f}\n"
-                                 f"Sentiment: {sentiment_score:.2f}"
-                        )
-                    elif abs(confidence - 0.5) <= 0.001:
-                        logging.info(f"Hold signal: {symbol}, Confidence: {confidence:.2f}")
-                        with print_lock:
-                            print(f"Hold signal: {symbol}, Confidence: {confidence:.2f}", flush=True)
-                    
-                    save_state(cash, positions, stop_loss_multipliers)
-                
-                logging.info(f"Portfolio Value: {portfolio_value:.2f}, Cash: {total_cash:.2f}")
-                with print_lock:
-                    print(f"Portfolio Value: {portfolio_value:.2f}, Cash: {total_cash:.2f}", flush=True)
-                current_time = time.time()
-                if current_time - last_portfolio_email_time >= EMAIL_INTERVAL:
-                    email_body = f"Portfolio Update:\n"
-                    email_body += f"Portfolio Value: ${portfolio_value:.2f}\n"
-                    email_body += f"Total Cash: ${total_cash:.2f}\n"
-                    email_body += "Positions:\n"
-                    for symbol in SYMBOLS:
-                        email_body += f"  {symbol}: {positions[symbol]} shares, Cash: ${cash[symbol]:.2f}\n"
-                    send_email(
-                        subject="Portfolio Update",
-                        body=email_body
+                if price <= stop_loss or price >= take_profit or pred < sell_threshold:
+                    cash += position * price
+                    ret = (price - entry_price) / entry_price
+                    returns.append(ret)
+                    trade_count += 1
+                    if ret > 0:
+                        winning_trades += 1
+                    logger.info(
+                        f"{ts}: Sold {position} shares of {symbol} at ${price:.2f}, "
+                        f"return: {ret:.3f}, cash: ${cash:.2f}, position: 0"
                     )
-                    last_portfolio_email_time = current_time
-                time.sleep(900)
-            
-            except Exception as e:
-                logging.error(f"Error in trading loop: {e}")
-                with print_lock:
-                    print(f"Error in trading loop: {e}", flush=True)
-                send_email(
-                    subject="Trading Loop Error",
-                    body=f"Error in trading loop:\n"
-                         f"Message: {e}\n"
-                         f"Portfolio Value: ${portfolio_value:.2f}\n"
-                         f"Retrying in 60 seconds."
-                )
-                time.sleep(60)
-    
+                    position = 0
+                    entry_price = 0.0
+                
+                # Log zero quantity periodically to track insufficient cash
+                if qty == 0 and i % 100 == 0:
+                    logger.info(
+                        f"{ts}: Zero quantity for {symbol}: cash=${cash:.2f}, price=${price:.2f}"
+                    )
+        
+        # Close any open position at the end
+        if position > 0:
+            cash += position * prices[-1]
+            ret = (prices[-1] - entry_price) / entry_price
+            returns.append(ret)
+            trade_count += 1
+            if ret > 0:
+                winning_trades += 1
+            logger.info(
+                f"{timestamps[-1]}: Closed position for {symbol} at ${prices[-1]:.2f}, "
+                f"return: {ret:.3f}, final cash: ${cash:.2f}"
+            )
+        
+        # Calculate win rate
+        win_rate = (winning_trades / trade_count * 100) if trade_count > 0 else 0.0
+        
+        return round(cash, 2), returns, trade_count, round(win_rate, 3)
     except Exception as e:
-        logging.error(f"Error in trading strategy: {e}")
-        with print_lock:
-            print(f"Error in trading strategy: {e}", flush=True)
-        send_email(
-            subject="Trading Strategy Error",
-            body=f"Critical error in trading strategy:\n"
-                 f"Message: {e}\n"
-                 f"Bot stopped."
-        )
+        logger.error(f"Error in backtest for {symbol}: {str(e)}")
         raise
-    finally:
-        save_state(cash, positions, stop_loss_multipliers)
-        log_queue.put(None)
-        debug_queue.put(None)
 
-def backtest_strategy(sentiment_analyzer):
-    try:
-        models = {}
-        scalers = {}
-        stop_loss_multipliers = {}
-        cash = {symbol: CASH_PER_STOCK for symbol in SYMBOLS}
-        positions = {symbol: 0 for symbol in SYMBOLS}
-        trades = []
-        
-        with print_lock:
-            print("Starting model training for backtesting...", flush=True)
-        
-        total_epochs = EPOCHS_PER_STOCK * len(SYMBOLS)
-        progress_lock = threading.Lock()
-        symbol_outputs = {}
-        with tqdm(total=total_epochs, desc="Training for Backtest", 
-                  bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
-                  colour="green", leave=True) as progress_bar:
-            with ThreadPoolExecutor(max_workers=min(len(SYMBOLS), 2)) as executor:
-                futures = {executor.submit(train_model, symbol, progress_bar, progress_lock, sentiment_analyzer): symbol for symbol in SYMBOLS}
-                for future in futures:
-                    symbol = futures[future]
-                    try:
-                        model, scaler, multiplier, messages = future.result()
-                        models[symbol] = model
-                        scalers[symbol] = scaler
-                        stop_loss_multipliers[symbol] = multiplier
-                        symbol_outputs[symbol] = messages
-                        if model is None or scaler is None:
-                            logging.warning(f"Skipping {symbol} due to training failure")
-                            symbol_outputs[symbol].append(f"Skipping {symbol} due to training failure.")
-                    except Exception as e:
-                        logging.error(f"Error training {symbol}: {e}")
-                        symbol_outputs[symbol] = symbol_outputs.get(symbol, []) + [f"Error training {symbol}: {e}"]
-        
-        progress_bar.close()
-        
-        with print_lock:
-            for symbol in SYMBOLS:
-                print(f"{Fore.LIGHTBLUE_EX}\nTraining {symbol}:{Fore.RESET}")
-                for msg in symbol_outputs.get(symbol, []):
-                    print(f"  {msg}")
-        
-        with print_lock:
-            print("\nTraining complete. Starting backtest simulation...", flush=True)
-        
-        for symbol in SYMBOLS:
-            data, news_data, _ = get_stock_data(symbol, TRADE_TIMEFRAME, TRADE_DAYS)
-            if data.empty or models[symbol] is None:
-                with print_lock:
-                    print(f"Skipping {symbol} due to missing data or model.", flush=True)
-                continue
-            
-            sentiment_score, _ = calculate_sentiment(news_data, sentiment_analyzer)
-            features = calculate_indicators(data, TRADE_TIMEFRAME, sentiment_score)
-            if features.empty:
-                with print_lock:
-                    print(f"Skipping {symbol} due to indicator calculation failure.", flush=True)
-                continue
-            
-            X, _, preprocess_messages = preprocess_data(features)
-            if X is None:
-                with print_lock:
-                    print(f"Skipping {symbol} due to preprocessing failure: {preprocess_messages}", flush=True)
-                continue
-            
-            X = scalers[symbol].transform(X.reshape(-1, X.shape[-1])).reshape(X.shape)
-            predictions = models[symbol].predict(X, verbose=0, batch_size=BATCH_SIZE)
-            
-            # Log prediction statistics
-            logging.info(f"Predictions for {symbol}: mean={np.mean(predictions):.3f}, std={np.std(predictions):.3f}, min={np.min(predictions):.3f}, max={np.max(predictions):.3f}")
-            with print_lock:
-                print(f"Predictions for {symbol}: mean={np.mean(predictions):.3f}, std={np.std(predictions):.3f}, min={np.min(predictions):.3f}, max={np.max(predictions):.3f}", flush=True)
-            
-            for i, confidence in enumerate(predictions.flatten()):
-                if i >= len(features) - LOOKBACK:
-                    break
-                current_price = round(features['close'].iloc[i + LOOKBACK], 2)
-                atr = features['ATR'].iloc[i + LOOKBACK] if 'ATR' in features else 1.0
-                qty = int(min(cash[symbol] * MAX_POSITION_SIZE, cash[symbol]) / (atr + 1e-6) // current_price)
-                
-                if qty == 0:
-                    logging.info(f"Zero quantity for {symbol} at index {i}: cash={cash[symbol]:.2f}, price={current_price:.2f}")
-                    continue
-                
-                signal_type = 'Buy' if confidence > CONFIDENCE_THRESHOLD else 'Sell' if confidence < CONFIDENCE_THRESHOLD else 'Hold'
-                logging.info(f"Backtest signal for {symbol} at index {i}: price={current_price:.2f}, confidence={confidence:.3f}, signal={signal_type}")
-                
-                if confidence > CONFIDENCE_THRESHOLD and cash[symbol] >= current_price and qty > 0 and positions[symbol] == 0:
-                    positions[symbol] += qty
-                    cash[symbol] -= qty * current_price
-                    trades.append({"symbol": symbol, "action": "buy", "price": current_price, "qty": qty, "time": features.index[i + LOOKBACK]})
-                    with print_lock:
-                        print(f"Backtest Buy: {symbol} at {current_price:.2f}, Qty: {qty}, Confidence: {confidence:.3f}", flush=True)
-                elif confidence < CONFIDENCE_THRESHOLD and positions[symbol] > 0:
-                    cash[symbol] += positions[symbol] * current_price
-                    trades.append({"symbol": symbol, "action": "sell", "price": current_price, "qty": positions[symbol], "time": features.index[i + LOOKBACK]})
-                    with print_lock:
-                        print(f"Backtest Sell: {symbol} at {current_price:.2f}, Qty: {positions[symbol]}, Confidence: {confidence:.3f}", flush=True)
-                    positions[symbol] = 0
-                else:
-                    logging.info(f"No trade for {symbol} at index {i}: confidence={confidence:.3f}, signal={signal_type}")
-        
-        final_value = sum(cash.values()) + sum(
-            positions[symbol] * round(data["close"].iloc[-1], 2) for symbol in SYMBOLS if positions[symbol] > 0
-        )
-        with print_lock:
-            print(f"\nBacktest Results: Initial Cash: ${INITIAL_CASH:.2f}, Final Value: ${final_value:.2f}", flush=True)
-            print(f"Profit/Loss: ${(final_value - INITIAL_CASH):.2f}", flush=True)
-        
-        send_email(
-            subject="Backtest Completed",
-            body=f"Backtest Results:\n"
-                 f"Initial Cash: ${INITIAL_CASH:.2f}\n"
-                 f"Final Value: ${final_value:.2f}\n"
-                 f"Profit/Loss: ${(final_value - INITIAL_CASH):.2f}\n"
-                 f"Total Trades: {len(trades)}"
-        )
+def format_email_body(
+    initial_cash: float,
+    final_value: float,
+    symbol_results: Dict[str, Dict[str, float]],
+    trade_counts: Dict[str, int],
+    win_rates: Dict[str, float]
+) -> str:
+    """
+    Format email body with backtest results, including trade statistics.
     
+    Args:
+        initial_cash (float): Initial cash amount.
+        final_value (float): Final portfolio value.
+        symbol_results (Dict[str, Dict[str, float]]): Per-symbol performance metrics.
+        trade_counts (Dict[str, int]): Number of trades per symbol.
+        win_rates (Dict[str, float]): Win rate per symbol.
+    
+    Returns:
+        str: Formatted email body with results and statistics.
+    
+    Raises:
+        Exception: If formatting fails.
+    """
+    try:
+        body = [
+            f"Backtest Results",
+            f"=================",
+            f"Initial Cash: ${initial_cash:.2f}",
+            f"Final Value: ${final_value:.2f}",
+            f"Profit/Loss: ${final_value - initial_cash:.2f}",
+            f"Total Return: {(final_value - initial_cash) / initial_cash * 100:.2f}%",
+            f"",
+            f"Per-Symbol Performance:"
+        ]
+        
+        for symbol, metrics in symbol_results.items():
+            body.append(f"\n{symbol}:")
+            for metric, value in metrics.items():
+                body.append(f"  {metric.replace('_', ' ').title()}: {value:.3f}%")
+            body.append(f"  Number of Trades: {trade_counts.get(symbol, 0)}")
+            body.append(f"  Win Rate: {win_rates.get(symbol, 0.0):.3f}%")
+        
+        return "\n".join(body)
     except Exception as e:
-        with print_lock:
-            print(f"Error in backtest: {e}", flush=True)
-        send_email(
-            subject="Backtest Error",
-            body=f"Error in backtest:\n"
-                 f"Message: {e}"
+        logger.error(f"Error formatting email body: {str(e)}")
+        return f"Backtest Results\nError: {str(e)}"
+
+def send_email(subject: str, body: str) -> None:
+    """
+    Send email notification with backtest results.
+    
+    Args:
+        subject (str): Email subject line.
+        body (str): Email body content.
+    
+    Raises:
+        Exception: If email sending fails.
+    """
+    try:
+        msg = MIMEText(body)
+        msg['Subject'] = subject
+        msg['From'] = CONFIG['EMAIL_SENDER']
+        msg['To'] = CONFIG['EMAIL_RECEIVER']
+        
+        with smtplib.SMTP(CONFIG['SMTP_SERVER'], CONFIG['SMTP_PORT']) as server:
+            server.starttls()
+            server.login(CONFIG['EMAIL_SENDER'], CONFIG['EMAIL_PASSWORD'])
+            server.send_message(msg)
+        
+        logger.info(f"Email sent: Subject: {subject} to {CONFIG['EMAIL_RECEIVER']}")
+    except Exception as e:
+        logger.error(
+            f"Error sending email: {str(e)}. "
+            f"Check SMTP settings (EMAIL_SENDER, EMAIL_PASSWORD, SMTP_SERVER, SMTP_PORT) in CONFIG."
         )
         raise
-    finally:
-        log_queue.put(None)
-        debug_queue.put(None)
+
+def main(backtest_only: bool = False) -> None:
+    """
+    Main function to run the trading bot, handling both training and backtesting.
+    
+    Args:
+        backtest_only (bool): If True, run backtest using pre-trained models; otherwise, train models.
+    
+    Raises:
+        Exception: If main loop fails (e.g., configuration error, API failure).
+    """
+    try:
+        # Check for required dependencies
+        check_dependencies()
+        
+        # Validate configuration to ensure all parameters are correct
+        validate_config(CONFIG)
+        
+        # Create cache directory for storing models and data
+        create_cache_directory()
+        
+        # Initialize portfolio variables
+        initial_cash = CONFIG['INITIAL_CASH']
+        final_value = initial_cash
+        symbol_results = {}
+        trade_counts = {}
+        win_rates = {}
+        
+        # Process each symbol in the configuration
+        for symbol in CONFIG['SYMBOLS']:
+            try:
+                logger.info(f"Processing {symbol}")
+                
+                # Fetch historical data
+                df = fetch_data(
+                    symbol, CONFIG['TIMEFRAME'], CONFIG['TIMEFRAME_INTERVAL'], CONFIG['NUM_BARS']
+                )
+                
+                # Validate fetched data
+                validate_data(df, symbol)
+                
+                # Load sentiment score
+                sentiment = load_news_sentiment(symbol)
+                
+                # Calculate technical indicators
+                df = calculate_indicators(df, sentiment)
+                
+                if backtest_only:
+                    try:
+                        # Attempt to load pre-trained model and scaler
+                        model, scaler = load_model_and_scaler(symbol)
+                    except FileNotFoundError as e:
+                        logger.warning(
+                            f"{str(e)}. Falling back to training for {symbol} in backtest-only mode"
+                        )
+                        X, y = preprocess_data(df, CONFIG['TIMESTEPS'])
+                        model, scaler = train_model(
+                            symbol, X, y, CONFIG['TRAIN_EPOCHS'], CONFIG['BATCH_SIZE']
+                        )
+                else:
+                    # Clear cache to ensure fresh training
+                    for file in [f"{symbol}_model.keras", f"{symbol}_scaler.pkl", f"{symbol}_data.pkl"]:
+                        file_path = os.path.join(CONFIG['CACHE_DIR'], file)
+                        if os.path.exists(file_path):
+                            os.remove(file_path)
+                            logger.info(f"Deleted cached {file} for {symbol}")
+                    
+                    # Preprocess data for training
+                    X, y = preprocess_data(df, CONFIG['TIMESTEPS'])
+                    
+                    # Train the model
+                    model, scaler = train_model(
+                        symbol, X, y, CONFIG['TRAIN_EPOCHS'], CONFIG['BATCH_SIZE']
+                    )
+                
+                # Run backtest with trading logic
+                cash, returns, trade_count, win_rate = backtest(
+                    symbol, model, scaler, df, CONFIG['INITIAL_CASH'],
+                    CONFIG['STOP_LOSS_MULTIPLIER'], CONFIG['TAKE_PROFIT_MULTIPLIER'],
+                    CONFIG['TIMESTEPS'], CONFIG['PREDICTION_THRESHOLD_BUY'],
+                    CONFIG['PREDICTION_THRESHOLD_SELL']
+                )
+                
+                # Update portfolio value
+                final_value += cash - (initial_cash / len(CONFIG['SYMBOLS']))
+                
+                # Store performance metrics and trade statistics
+                symbol_results[symbol] = calculate_performance_metrics(
+                    returns, cash, initial_cash / len(CONFIG['SYMBOLS'])
+                )
+                trade_counts[symbol] = trade_count
+                win_rates[symbol] = win_rate
+                logger.info(f"Backtest for {symbol} completed: cash=${cash:.2f}, trades={trade_count}")
+                
+            except Exception as e:
+                logger.error(f"Skipping {symbol} due to error: {str(e)}")
+                continue
+        
+        # Format and send email with results
+        email_body = format_email_body(initial_cash, final_value, symbol_results, trade_counts, win_rates)
+        send_email("Backtest Completed", email_body)
+        logger.info(f"Bot completed: Final value: ${final_value:.2f}")
+    
+    except Exception as e:
+        logger.error(f"Main loop failed: {str(e)}")
+        raise
 
 if __name__ == "__main__":
-    # Validate Alpaca API credentials
-    try:
-        api.get_account()
-    except Exception as e:
-        logging.error(f"Alpaca API authentication failed: {e}")
-        print(f"Alpaca API authentication failed: {e}")
-        sys.exit(1)
-    
-    logging.info("Bot started.")
-    with print_lock:
-        print("Bot started.", flush=True)
-    
-    # Initialize sentiment analysis pipeline
-    sentiment_analyzer = None
-    try:
-        sentiment_analyzer = pipeline("sentiment-analysis", model="ProsusAI/finbert")
-        logging.info("FinBERT initialized successfully.")
-        with print_lock:
-            print("FinBERT initialized successfully.", flush=True)
-    except Exception as e:
-        logging.error(f"Error initializing FinBERT: {e}. Sentiment analysis disabled.")
-        with print_lock:
-            print(f"Error initializing FinBERT: {e}. Sentiment analysis disabled.", flush=True)
-        sentiment_analyzer = None
-    
-    parser = argparse.ArgumentParser(description="Alpaca Neural Bot")
-    parser.add_argument("--mode", choices=["live", "backtest"], default="live", help="Mode: live or backtest")
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="Trading bot with backtest mode")
+    parser.add_argument(
+        '--backtest',
+        action='store_true',
+        help="Run in backtest-only mode using pre-trained models"
+    )
     args = parser.parse_args()
-
-    if args.mode == "live":
-        with print_lock:
-            print(f"Starting advanced neural network trading bot for {', '.join(SYMBOLS)}...", flush=True)
-            print("Training neural network with sentiment and volatility adjustments...", flush=True)
-        send_email(
-            subject="Trading Bot Started",
-            body=f"Advanced neural network trading bot started for {', '.join(SYMBOLS)}.\n"
-                 f"Training with {TRAIN_DAYS} days of {TRAIN_TIMEFRAME} data.\n"
-                 f"Initial cash: ${INITIAL_CASH:.2f}"
-        )
-        trading_strategy(sentiment_analyzer)
-    elif args.mode == "backtest":
-        with print_lock:
-            print("Starting backtesting mode...", flush=True)
-        backtest_strategy(sentiment_analyzer)
+    
+    logger.info("Bot started")
+    try:
+        main(backtest_only=args.backtest)
+    except Exception as e:
+        logger.error(f"Bot failed: {str(e)}")
+        raise
