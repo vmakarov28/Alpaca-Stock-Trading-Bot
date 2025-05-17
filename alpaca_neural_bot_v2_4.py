@@ -44,22 +44,22 @@ colorama.init()
 
 # Configuration variables
 CONFIG = {
-    'SYMBOLS': ['NVDA', 'TSLA', 'AAPL', 'MSFT', 'AMZN'],
+    'SYMBOLS': ['NVDA', 'TSLA', 'AAPL', 'MSFT', 'AMZN', 'SPY'],
     'TIMEFRAME': TimeFrame(15, TimeFrameUnit.Minute),
     'TRAIN_DATA_START_DATE': '2015-01-01',
     'SIMULATION_DAYS': 365,
     'TRAIN_EPOCHS': 25,
     'BATCH_SIZE': 32,
-    'INITIAL_CASH': 25000.0,
+    'INITIAL_CASH': 25000.0, #CHANGE
     'TIMESTEPS': 30,
     'MIN_DATA_POINTS': 100,
     'CACHE_DIR': './cache',
     'CACHE_EXPIRY_SECONDS': 24 * 60 * 60,
-    'ALPACA_API_KEY': 'PKT4UKMCGCISCTKNXGNO',
-    'ALPACA_SECRET_KEY': 'ZSMm7ES7daRazPsIgk1KOg2QxgcTXHNBgyCXtqY9',
-    'EMAIL_SENDER': 'alpaca.ai.tradingbot@gmail.com',
-    'EMAIL_PASSWORD': 'hjdf sstp pyne rotq',
-    'EMAIL_RECEIVER': ['aiplane.scientist@gmail.com', 'tchaikovskiy@hotmail.com'],
+    'ALPACA_API_KEY': 'insert your key', #CHANGE
+    'ALPACA_SECRET_KEY': 'insert your key', #CHANGE 
+    'EMAIL_SENDER': 'example@gmail.com', #CHANGE
+    'EMAIL_PASSWORD': 'abcd hijk lmno pqrs', #CHANGE
+    'EMAIL_RECEIVER': ['example1@gmail.com', 'example2@hotmail.com'], #CHANGE
     'SMTP_SERVER': 'smtp.gmail.com',
     'SMTP_PORT': 587,
     'LOG_FILE': 'trades.log',
