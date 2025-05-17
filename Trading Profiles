@@ -1,0 +1,5 @@
+| Profile               | CONFIDENCE_THRESHOLD | MAX_VOLATILITY | ADX_TREND_THRESHOLD | RISK_PERCENTAGE |
+|-----------------------|----------------------|----------------|---------------------|-----------------|
+| Safe Long-Term        | 0.85                 | 0.02           | 35                  | 0.0025          |
+| Balanced              | 0.7                  | 0.05           | 25                  | 0.01            |
+| Aggressive Short-Term | 0.6                  | 0.08           | 15                  | 0.025           |
