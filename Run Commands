@@ -1,0 +1,5 @@
+#Replace "2_4" with appropriate version number
+python alpaca_neural_bot_v2_4.py #Live trading, use cached models
+python alpaca_neural_bot_v2_4.py --force-train #Live trading, retrain models
+python alpaca_neural_bot_v2_4.py --backtest #Backtest, use cached models
+python alpaca_neural_bot_v2_4.py --backtest --force-train #Backtest, retrain models
