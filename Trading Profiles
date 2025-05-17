@@ -1,5 +1,5 @@
-| Profile               | CONFIDENCE_THRESHOLD | MAX_VOLATILITY | ADX_TREND_THRESHOLD | RISK_PERCENTAGE |
-|-----------------------|----------------------|----------------|---------------------|-----------------|
-| Safe Long-Term        | 0.85                 | 0.02           | 35                  | 0.0025          |
-| Balanced              | 0.7                  | 0.05           | 25                  | 0.01            |
-| Aggressive Short-Term | 0.6                  | 0.08           | 15                  | 0.025           |
+| Profile               | CONFIDENCE_THRESHOLD | MAX_VOLATILITY | ADX_TREND_THRESHOLD | RISK_PERCENTAGE | TAKE_PROFIT_ATR_MULTIPLIER |   1 Year Backtest Simulation portfolio value from $25,000   |
+|-----------------------|----------------------|----------------|---------------------|-----------------|----------------------------|-------------------------------------------------------------|
+| Safe Long-Term        | 0.55                 | 0.5            | 20                  | 0.03            | 4.00                       | ~$35,000; Better off holding, 4 Trades in 1 Year            |
+| Balanced              | 0.55                 | 2.0            | 30                  | 0.50            | 2.00                       | ~$47,000; Approximatly 25 Trades in one year.               |
+| Aggressive Short-Term | 0.5                  | 3.0            | 30                  | 0.5             | 2.00                       | ~$60,000; Approximatly 30 Trades in one year.               |
