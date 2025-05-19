@@ -6,7 +6,7 @@
 # +------------------------------------------------------------------------------+
 # | Author: Vladimir Makarov                                                     |
 # | Date Written: May 9, 2025                                                    |
-# | License: MIT License                                                         |
+# | License: GNU Lesser General Public License v2.1                              |
 # | Version: 2.4 (Released May 18, 2025)                                         |
 # |                                                                              |
 # | Description:                                                                 |
