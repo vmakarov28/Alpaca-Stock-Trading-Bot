@@ -5,4 +5,4 @@
 | Short-Term            | 0.5                  | 3.0            | 30                  | 0.5             | 2.00                       | ~$60,000;  Approximatly 30 Trades in one year.       |                                         |
 \------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------/
 NOTE: All simulations were run with a starting balance of $25,000 and run for 1 year starting at 01/01/2015. Stocks used: ['NVDA', 'TSLA', 'AAPL', 'MSFT', 'AMZN', 'SPY']
-Same profit from buying $4,166.66 (25,000 / 6) of each stock and holding for 1 year starting 01/01/2015: $29,830
+Same profit from buying $4,166.66 (25,000 / 6) of each stock and holding for 1 year starting 01/01/2015: $29,874
