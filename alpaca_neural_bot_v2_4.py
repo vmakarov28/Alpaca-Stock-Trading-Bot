@@ -1,6 +1,53 @@
 # alpaca_neural_bot_v2_ 4.py
 # Version 2.4 - Fixed AttributeError in backtest function by ensuring timestamps are pandas.Timestamp objects.
 # Improved with Trailing Stop-Loss, Volatility-Based Position Sizing, Confidence Threshold, No-Trade Zone, and ADX Indicator.
+# +------------------------------------------------------------------------------+
+# | Alpaca Neural Bot v2.4                                                       |
+# +------------------------------------------------------------------------------+
+# | Author: Vladimir Makarov                                                     |
+# | Date Written: May 9, 2025                                                    |
+# | License: MIT License                                                         |
+# | Version: 2.4 (Released May 18, 2025)                                         |
+# |                                                                              |
+# | Description:                                                                 |
+# | This is an advanced AI-powered trading bot leveraging neural networks to     |
+# | predict market movements and execute trades. It integrates seamlessly with   |
+# | Alpaca for real-time market data and trade execution. Key features include:  |
+# | - Neural Network Predictions: Trained on historical and live data for        |
+# |   accurate buy/sell signals.                                                 |
+# | - Sentiment Analysis: Incorporates news and social media sentiment to        |
+# |   enhance decision-making.                                                   |
+# | - Technical Indicators: Uses RSI, MACD, ADX, and more for market analysis.   |
+# | - Dynamic Risk Management: Adjusts position sizing and stop-loss based on    |
+# |   volatility and max drawdown limits.                                        |
+# | - Backtesting & Live Trading: Supports simulation and real-time modes.       |
+# | What makes it special: Its ability to adapt to market conditions using AI,   |
+# | combined with a robust feature set, sets it apart from traditional bots.     |
+# |                                                                              |
+# | Configuration: Defined in the CONFIG dictionary. See code for details.       |
+# |                                                                              |       
+# |                                                                              |
+# | Dependencies:                                                                |
+# | - tensorflow (Neural network framework)                                      |
+# | - numpy (Numerical computations)                                             |
+# | - pandas (Data manipulation)                                                 |
+# | - alpaca-trade-api (Alpaca integration)                                      |
+# | - transformers (Sentiment analysis)                                          | 
+# | - scikit-learn (Machine learning utilities)                                  | 
+# | - TA-Lib (Technical analysis)                                                |
+# | - tenacity (Retry logic)                                                     |
+# | - smtplib (Email notifications)                                              |
+# | - argparse (Command-line parsing)                                            |
+# | - tqdm (Progress bars)                                                       |
+# | - colorama (Console formatting)                                              |
+# | Install using: pip install <package>                                         |
+# |                                                                              |
+# | Notes:                                                                       |
+# | - Ensure Alpaca API keys are configured in CONFIG.                           |
+# | - Requires stable internet for live trading and data fetching .              |
+# | - GitHub: https://github.com/vmakarov28/Alpaca-Stock-Trading-Bot/tree/main   |
+# |                                                                              |
+# +------------------------------------------------------------------------------+
 
 import os
 import sys
