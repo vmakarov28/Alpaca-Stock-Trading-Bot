@@ -1,11 +1,12 @@
 # alpaca_neural_bot_v2_ 4.py
 # Version 2.4 - Fixed AttributeError in backtest function by ensuring timestamps are pandas.Timestamp objects.
 # Improved with Trailing Stop-Loss, Volatility-Based Position Sizing, Confidence Threshold, No-Trade Zone, and ADX Indicator.
+# Added acceptable / recommended ranges to tunning variables for better user experience.
 # +------------------------------------------------------------------------------+
 # | Alpaca Neural Bot v2.4                                                       |
 # +------------------------------------------------------------------------------+
 # | Author: Vladimir Makarov                                                     |
-# | Date Written: May 9, 2025                                                    |
+# | Project Start Date: May 9, 2025                                              |
 # | License: GNU Lesser General Public License v2.1                              |
 # | Version: 2.4 (Released May 18, 2025)                                         |
 # |                                                                              |
@@ -42,7 +43,7 @@
 # | - colorama (Console formatting)                                              |
 # | Install using: pip install <package>                                         |
 # |                                                                              |
-# | Notes:                                                                       |
+# | Double check before starting:                                                |
 # | - Ensure Alpaca API keys are configured in CONFIG.                           |
 # | - Requires stable internet for live trading and data fetching .              |
 # | - GitHub: https://github.com/vmakarov28/Alpaca-Stock-Trading-Bot/tree/main   |
@@ -103,9 +104,9 @@ CONFIG = {
     'CACHE_DIR': './cache',
     'CACHE_EXPIRY_SECONDS': 24 * 60 * 60,
     'ALPACA_API_KEY': 'insert your key', #CHANGE
-    'ALPACA_SECRET_KEY': 'insert your key', #CHANGE 
+    'ALPACA_SECRET_KEY': 'insert your secret key', #CHANGE 
     'EMAIL_SENDER': 'example@gmail.com', #CHANGE
-    'EMAIL_PASSWORD': 'abcd hijk lmno pqrs', #CHANGE
+    'EMAIL_PASSWORD': 'abcd efgh ijkl mnop', #CHANGE
     'EMAIL_RECEIVER': ['example1@gmail.com', 'example2@hotmail.com'], #CHANGE
     'SMTP_SERVER': 'smtp.gmail.com',
     'SMTP_PORT': 587,
@@ -121,10 +122,10 @@ CONFIG = {
     'SENTIMENT_MODEL': 'distilbert-base-uncased-finetuned-sst-2-english',
     'TRAILING_STOP_PERCENTAGE': 0.02,  # New: Trailing stop percentage
 #Customize this for different trading styles
-    'CONFIDENCE_THRESHOLD': 0.5,  # New: Confidence threshold for trades
-    'MAX_VOLATILITY': 3,  # New: No-trade zone volatility limit
-    'ADX_TREND_THRESHOLD': 30,  # New: ADX threshold for trending market
-    'RISK_PERCENTAGE': 0.8, # New: Risk percentage for position sizing
+    'CONFIDENCE_THRESHOLD': 0.5,  # New: Confidence threshold for trade. acceptable range: 0-1, recommended range: 0.5-0.7
+    'MAX_VOLATILITY': 3,  # New: No-trade zone volatility limit. acceptable range: 0-10, recommended range: 0-5
+    'ADX_TREND_THRESHOLD': 30,  # New: ADX threshold for trending market. acceptable range 0-100, recommended range 20-40
+    'RISK_PERCENTAGE': 0.8, # New: Risk percentage for position sizing. acceptable range 0-1
     'STOP_LOSS_ATR_MULTIPLIER': 1.5,
     'TAKE_PROFIT_ATR_MULTIPLIER': 2.0,
 }
