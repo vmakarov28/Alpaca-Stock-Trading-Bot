@@ -19,7 +19,7 @@ from transformers import pipeline
 from sklearn.preprocessing import StandardScaler
 import smtplib
 from email.mime.text import MIMEText
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone  # Modified: Added timezone
 import talib
 import pickle
 from typing import List, Tuple, Dict, Optional
@@ -51,11 +51,11 @@ CONFIG = {
     'MIN_DATA_POINTS': 100,
     'CACHE_DIR': './cache',
     'CACHE_EXPIRY_SECONDS': 24 * 60 * 60,
-    'ALPACA_API_KEY': 'insert your key',
-    'ALPACA_SECRET_KEY': 'insert your secret key',
-    'EMAIL_SENDER': 'example@gmail.com',
-    'EMAIL_PASSWORD': 'abcd efgh ijkl mnop',
-    'EMAIL_RECEIVER': ['example1@gmail.com', 'example2@hotmail.com'],
+    'ALPACA_API_KEY': 'PKAH6YBD35AZNOVTHQ2G',
+    'ALPACA_SECRET_KEY': 'AdGuIkWGOyeiegwseljcSGjUhdGw7YpBPLrepTEw',
+    'EMAIL_SENDER': 'alpaca.ai.tradingbot@gmail.com',
+    'EMAIL_PASSWORD': 'hjdf sstp pyne rotq',
+    'EMAIL_RECEIVER': ['aiplane.scientist@gmail.com', 'tchaikovskiy@hotmail.com'],
     'SMTP_SERVER': 'smtp.gmail.com',
     'SMTP_PORT': 587,
     'LOG_FILE': 'trades.log',
@@ -677,8 +677,8 @@ Portfolio Value: ${portfolio_value:.2f}
                 send_email("Trading Summary", summary_body)
             else:
                 next_open = clock.next_open
-                while datetime.now() < next_open:
-                    time_left = next_open - datetime.now()
+                while datetime.now(timezone.utc) < next_open:  # Modified: Use timezone.utc
+                    time_left = next_open - datetime.now(timezone.utc)
                     hours, remainder = divmod(time_left.total_seconds(), 3600)
                     minutes, seconds = divmod(remainder, 60)
                     timer_str = f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
