@@ -93,11 +93,11 @@ CONFIG = {
     'MIN_DATA_POINTS': 100,  # Minimum number of bars required
     'CACHE_DIR': './cache',  # Directory for cached data/models
     'CACHE_EXPIRY_SECONDS': 24 * 60 * 60,  # Cache expiry (24 hours)
-    'ALPACA_API_KEY': 'PKN7X4X2GEUK7LJTMVU8',  # Alpaca API key
-    'ALPACA_SECRET_KEY': 'd8mEV3OqhfEYG1cT4CC6JJbjJ3sbimeglSKchBa0',  # Alpaca secret key
-    'EMAIL_SENDER': 'alpaca.ai.tradingbot@gmail.com',  # Email sender address
-    'EMAIL_PASSWORD': 'hjdf sstp pyne rotq',  # Email app password
-    'EMAIL_RECEIVER': ['aiplane.scientist@gmail.com', 'tchaikovskiy@hotmail.com'],  # Email receiver addresses
+    'ALPACA_API_KEY': '',  # Alpaca API key
+    'ALPACA_SECRET_KEY': '',  # Alpaca secret key
+    'EMAIL_SENDER': 'bot@gmail.com',  # Email sender address
+    'EMAIL_PASSWORD': '',  # Email app password
+    'EMAIL_RECEIVER': ['', ''],  # Email receiver addresses
     'SMTP_SERVER': 'smtp.gmail.com',  # SMTP server
     'SMTP_PORT': 587,  # SMTP port
     'LOG_FILE': 'trades.log',  # Log file name
