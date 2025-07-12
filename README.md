@@ -53,8 +53,8 @@ sudo apt update && sudo apt upgrade -y
 Restart your PC if prompted.
 
 ### Troubleshooting:
-If WSL installation fails, enable "Virtual Machine Platform" in Windows Features (Control Panel > Programs > Turn Windows features on/off).
-Check WSL version: wsl --list --verbose. Ensure Ubuntu is on version 2.
+- If WSL installation fails, enable "Virtual Machine Platform" in Windows Features (Control Panel > Programs > Turn Windows features on/off).
+- Check WSL version: wsl --list --verbose. Ensure Ubuntu is on version 2.
 
 ## Step 2: Install pyenv for Python Management
 
@@ -108,10 +108,8 @@ Upgrade pip:
 
     pip install --upgrade pip
 
-Troubleshooting:
-
-    Installation takes time; be patient.
-    If build fails, ensure all dependencies from Step 1 are installed.
+Troubleshooting
+- If build fails, ensure all dependencies from Step 1 are installed.
 
 
 ## Step 4: Install CUDA Toolkit in WSL
@@ -156,11 +154,9 @@ Update your environment: Add to ~/.bashrc (run `nano ~/.bashrc`):
 
 ### Troubleshooting
 
-If CUDA is not detected: Check nvidia-smi in WSL for GPU info.
-
-Errors with versions: Ensure CUDA toolkit, cuDNN, and PyTorch match (e.g., all for CUDA 12.x).
-
-For detailed guides: Refer to NVIDIA's CUDA on WSL user guide (linked above) or PyTorch installation docs at https://pytorch.org/get-started/locally/.
+- If CUDA is not detected: Check nvidia-smi in WSL for GPU info.
+- Errors with versions: Ensure CUDA toolkit, cuDNN, and PyTorch match (e.g., all for CUDA 12.x).
+- For detailed guides: Refer to NVIDIA's CUDA on WSL user guide (linked above) or PyTorch installation docs at https://pytorch.org/get-started/locally/.
 
 
 
