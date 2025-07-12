@@ -113,7 +113,7 @@ Troubleshooting:
     Installation takes time; be patient.
     If build fails, ensure all dependencies from Step 1 are installed.
 
-## Step 3: Set Up Python Environment
+
 ## Step 4: Install CUDA Toolkit in WSL
 
 Open your WSL terminal (e.g., Ubuntu): Run wsl in Command Prompt or search for "Ubuntu" in the Start menu.
