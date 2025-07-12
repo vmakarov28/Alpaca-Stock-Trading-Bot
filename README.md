@@ -34,7 +34,7 @@ Alpaca Account: Free account with paper trading enabled. Get API keys from Alpac
 Gmail Account: For email notifications (enable "Less secure app access" or use app password).
 Internet: Stable connection for API calls (no VPN recommended to avoid rate limits).
 
-#Installation Steps
+# Installation Steps
 
 Follow these steps in order to set up the environment. All commands are for WSL/Ubuntu terminal.
 Step 1: Set Up WSL (Windows Users Only)
