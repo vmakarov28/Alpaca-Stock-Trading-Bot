@@ -28,11 +28,13 @@ Error Handling: Retries API calls, validates data, logs trades.
 
 ## Prerequisites
 
-Hardware: NVIDIA GPU (RTX 5080 recommended for CUDA acceleration). At least 16GB VRAM for efficient training.
+Drivers: Install the latest nvidia drivers from nvdia app along with Cuda 12.8 and cuDNN.
+Hardware: NVIDIA GPU (Confirmed to work propperly on RTX 5080 but other 50 series and 40 series card are likley to work). At least 16GB VRAM for efficient training.
 Operating System: Windows Subsystem for Linux (WSL2) on Windows 10/11, or native Ubuntu 22.04+.
 Alpaca Account: Free account with paper trading enabled. Get API keys from Alpaca Dashboard.
 Gmail Account: For email notifications (enable "Less secure app access" or use app password).
 Internet: Stable connection for API calls (no VPN recommended to avoid rate limits).
+
 
 # Installation Steps
 
@@ -111,19 +113,71 @@ Troubleshooting:
     Installation takes time; be patient.
     If build fails, ensure all dependencies from Step 1 are installed.
 
-Step 4: Install PyTorch with CUDA Support
 
-For RTX 5080 GPU acceleration (CUDA 12.8).
+Step 4: Install NVIDIA Drivers, CUDA, and cuDNN
 
-    Install PyTorch with CUDA 12.8:
+For RTX 5080 GPU support.
+
+    Install NVIDIA drivers (576.57+):
+        Download from NVIDIA Website.
+        Select GeForce RTX 50 Series, RTX 5080, Ubuntu.
+        Run the installer:
+        text
+
+    sudo bash NVIDIA-Linux-x86_64-<version>.run
+
+Install CUDA Toolkit 12.8:
+
+    Download from NVIDIA CUDA Downloads.
+    Select Linux, x86_64, Ubuntu 22.04, runfile (local).
+    Run:
     text
 
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
-Verify PyTorch and CUDA:
+sudo sh cuda_12.8.0_560.28.03_linux.run
+Add to PATH:
 text
 
+    export PATH=/usr/local/cuda-12.8/bin${PATH:+:${PATH}}
+    export LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+
+Install cuDNN 9.7.0 (for CUDA 12.8):
+
+    Download from NVIDIA cuDNN (requires account).
+    Select cuDNN for CUDA 12.x.
+    Extract and copy files:
+    text
+
+    tar -xvf cudnn-linux-x86_64-9.7.0.99_cuda12-archive.tar.xz
+    sudo cp cudnn-*-archive/include/* /usr/local/cuda/include
+    sudo cp cudnn-*-archive/lib/* /usr/local/cuda/lib64
+    sudo chmod a+r /usr/local/cuda/include/cudnn*.h /usr/local/cuda/lib64/libcudnn*
+
+Verify CUDA and cuDNN:
+text
+
+    nvidia-smi
+    Expected: Shows RTX 5080, driver 576.57+, CUDA 12.8.
+
+Troubleshooting:
+
+    nvidia-smi not found: Reinstall drivers.
+    CUDA not detected: Add PATH/LD_LIBRARY_PATH to ~/.bashrc and source it.
+    cuDNN error: Verify version matches CUDA.
+
+
+
+    
+
+Step 5: Install PyTorch with confirm CUDA Support
+
+For RTX 50 & 40 series GPU acceleration we will PyTorch for training the AI model:
+
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+
+Verify PyTorch, CUDA, and GPU detection:
+
     python -c "import torch; print(torch.__version__); print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0))"
-    Expected: Shows PyTorch version (e.g., 2.4.1+cu128), True, and "NVIDIA GeForce RTX 5080".
+Expected: Shows PyTorch version (e.g., 2.4.1+cu128), True, and "NVIDIA GeForce RTX _ _ _ _".
 
 Troubleshooting:
 
@@ -178,55 +232,6 @@ Troubleshooting:
     Protobuf error: Ensure protobuf==5.28.3 (for Transformers compatibility).
     Import error: Reinstall the package (e.g., pip install --force-reinstall transformers==4.45.2).
 
-Step 7: Install NVIDIA Drivers, CUDA, and cuDNN
-
-For RTX 5080 GPU support.
-
-    Install NVIDIA drivers (576.57+):
-        Download from NVIDIA Website.
-        Select GeForce RTX 50 Series, RTX 5080, Ubuntu.
-        Run the installer:
-        text
-
-    sudo bash NVIDIA-Linux-x86_64-<version>.run
-
-Install CUDA Toolkit 12.8:
-
-    Download from NVIDIA CUDA Downloads.
-    Select Linux, x86_64, Ubuntu 22.04, runfile (local).
-    Run:
-    text
-
-sudo sh cuda_12.8.0_560.28.03_linux.run
-Add to PATH:
-text
-
-    export PATH=/usr/local/cuda-12.8/bin${PATH:+:${PATH}}
-    export LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
-
-Install cuDNN 9.7.0 (for CUDA 12.8):
-
-    Download from NVIDIA cuDNN (requires account).
-    Select cuDNN for CUDA 12.x.
-    Extract and copy files:
-    text
-
-    tar -xvf cudnn-linux-x86_64-9.7.0.99_cuda12-archive.tar.xz
-    sudo cp cudnn-*-archive/include/* /usr/local/cuda/include
-    sudo cp cudnn-*-archive/lib/* /usr/local/cuda/lib64
-    sudo chmod a+r /usr/local/cuda/include/cudnn*.h /usr/local/cuda/lib64/libcudnn*
-
-Verify CUDA and cuDNN:
-text
-
-    nvidia-smi
-    Expected: Shows RTX 5080, driver 576.57+, CUDA 12.8.
-
-Troubleshooting:
-
-    nvidia-smi not found: Reinstall drivers.
-    CUDA not detected: Add PATH/LD_LIBRARY_PATH to ~/.bashrc and source it.
-    cuDNN error: Verify version matches CUDA.
 
 Step 8: Configure API Keys and Email
 
