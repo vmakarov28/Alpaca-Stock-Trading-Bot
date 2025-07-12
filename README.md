@@ -141,14 +141,13 @@ Download cuDNN from the NVIDIA Developer website: https://developer.nvidia.com/r
 - Download the tar file (e.g., cudnn-linux-x86_64-9.x.x.xx_cuda12-archive.tar.xz).
     In WSL, extract and install cuDNN:
         Copy the downloaded file to WSL (e.g., via /mnt/c/Users/YourUsername/Downloads/).
-        Run:
-        text
-
+Run:
+```
     tar -xvf cudnn-linux-x86_64-9.x.x.xx_cuda12-archive.tar.xz
     sudo cp cudnn-*-archive/include/cudnn*.h /usr/local/cuda/include
     sudo cp -P cudnn-*-archive/lib/libcudnn* /usr/local/cuda/lib64
     sudo chmod a+r /usr/local/cuda/include/cudnn*.h /usr/local/cuda/lib64/libcudnn*
-
+```
 Update your environment: Add to ~/.bashrc (run nano ~/.bashrc):
 text
 
