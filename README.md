@@ -73,6 +73,7 @@ Install pyenv:
 Add to shell profile (add to ~/.bashrc or ~/.zshrc). Open the file with the nano text editor with this command:
 
     nano ~/.bashrc
+    
 Then add the new paths to the file.
 > export PATH="$HOME/.pyenv/bin:$PATH"
 > 
@@ -149,8 +150,8 @@ Run:
 ```
 Update your environment: Add to ~/.bashrc (run `nano ~/.bashrc`):
 
-    export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
-        Save and run source ~/.bashrc.
+>export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+>Save and run source ~/.bashrc.
 
 ### Troubleshooting
 
