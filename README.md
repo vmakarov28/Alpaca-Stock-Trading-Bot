@@ -37,12 +37,10 @@ Internet: Stable connection for API calls (no VPN recommended to avoid rate limi
 # Installation Steps
 
 Follow these steps in order to set up the environment. All commands are for WSL/Ubuntu terminal.
-Step 1: Set Up WSL (Windows Users Only)
 
-If you're on Windows, enable WSL2 for Linux-based setup.
+### Step 1: Set Up WSL (Windows Users Only)
 
-Open PowerShell as Administrator:
-text
+If you're on Windows, enable WSL2 for Linux-based setup. Open PowerShell as Administrator and install Windows Subsystem for Linux:
 '''
 wsl --install
 wsl --install -d Ubuntu
