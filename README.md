@@ -149,17 +149,16 @@ Run:
     sudo cp -P cudnn-*-archive/lib/libcudnn* /usr/local/cuda/lib64
     sudo chmod a+r /usr/local/cuda/include/cudnn*.h /usr/local/cuda/lib64/libcudnn*
 ```
-Update your environment: Add to ~/.bashrc (run nano ~/.bashrc):
-text
+Update your environment: Add to ~/.bashrc (run `nano ~/.bashrc`):
 
     export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
         Save and run source ~/.bashrc.
 
 Step 4: Verify Installation and Run the Program
 
-    In WSL, install PyTorch with CUDA support: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 (use cu121 for CUDA 12.1; adjust if your version differs).
-    Test CUDA: Run python -c "import torch; print(torch.cuda.is_available())". It should return True.
-    Run your program: python your_script.py --backtest (ensure your PyTorch environment is activated if using one).
+In WSL, install PyTorch with CUDA support: `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128` (use cu128 for CUDA 12.8; adjust if your version differs).
+
+Test CUDA: Run `python -c "import torch; print(torch.cuda.is_available())"`. It should return True.
 
 Troubleshooting
 
