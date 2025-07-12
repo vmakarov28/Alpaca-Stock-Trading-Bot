@@ -92,20 +92,17 @@ Error with dependencies: Re-run sudo apt install command.
 
 ### Step 3: Set Up Python Environment
 
-Use Python 3.10 (compatible with dependencies).
+Use Python 3.10.12 (compatible with dependencies).
+Install Python 3.10:
 
-    Install Python 3.10:
-    text
-
-pyenv install 3.10.14
+    pyenv install 3.10.12
 Create virtual environment:
-text
-pyenv virtualenv 3.10.14 pytorch_env
-Activate:
-text
-pyenv activate pytorch_env
+
+    pyenv virtualenv 3.10.12 pytorch_env
+Activate the virtual envoriment (You will also need this command everytime you want to run the program after exiting:
+
+    pyenv activate pytorch_env
 Upgrade pip:
-text
 
     pip install --upgrade pip
 
