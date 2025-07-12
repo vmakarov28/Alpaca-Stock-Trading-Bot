@@ -1,8 +1,8 @@
-#Description
+Description
 
 Alpaca Neural Bot v6.7 is an advanced AI-powered stock trading bot that leverages neural networks to predict market trends and execute trades via the Alpaca API. Built with PyTorch for GPU acceleration (optimized for NVIDIA RTX 5080), it incorporates technical indicators (via TA-Lib), sentiment analysis (using Transformers), and risk management features like trailing stops, drawdown limits, and volatility filters. The bot supports both backtesting on historical data (from 2015 to the current date) and live paper trading.
 
-##Key capabilities
+Key capabilities
 
 Neural Network Prediction: Uses a Conv1D + LSTM model to generate buy/sell signals based on historical and real-time data.
 Sentiment Analysis: Integrates DistilBERT for news sentiment scoring.
