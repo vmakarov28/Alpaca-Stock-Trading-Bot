@@ -81,12 +81,11 @@ text
 
     pyenv --version
 
-Troubleshooting:
+### Troubleshooting:
+If pyenv not found, restart terminal or run exec $SHELL.
+Error with dependencies: Re-run sudo apt install command.
 
-    If pyenv not found, restart terminal or run exec $SHELL.
-    Error with dependencies: Re-run sudo apt install command.
-
-Step 3: Set Up Python Environment
+### Step 3: Set Up Python Environment
 
 Use Python 3.10 (compatible with dependencies).
 
