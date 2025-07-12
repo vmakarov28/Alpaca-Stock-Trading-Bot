@@ -186,33 +186,32 @@ False for CUDA: Ensure NVIDIA drivers are installed (Step 8).
 Wrong device: Verify nvidia-smi shows RTX 5080.
 Installation error: Check PyTorch index URL for CUDA version compatibility.
 
-Step 5: Install TA-Lib
+## Step 6: Install TA-Lib
 
 TA-Lib requires building from source for technical indicators.
 
-    Install dependencies:
-    text
+Install dependencies:
 
-sudo apt install -y build-essential wget
+    sudo apt install -y build-essential wget
+
 Download and build TA-Lib:
-text
-wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
-tar -xzf ta-lib-0.4.0-src.tar.gz
-cd ta-lib
-./configure --prefix=/usr
-make
-sudo make install
-cd ..
-rm -rf ta-lib ta-lib-0.4.0-src.tar.gz
+
+    wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
+    tar -xzf ta-lib-0.4.0-src.tar.gz
+    cd ta-lib
+    ./configure --prefix=/usr
+    make
+    sudo make install
+    cd ~
+    rm -rf ta-lib ta-lib-0.4.0-src.tar.gz
+
 Install Python wrapper:
-text
 
     pip install TA-Lib==0.4.32
 
-Troubleshooting:
-
-    Build error: Ensure build-essential is installed. If configure fails, check for missing libraries (e.g., sudo apt install libncurses5-dev).
-    Import error: Verify with python -c "import talib; print(talib.__version__)".
+Troubleshooting
+Build error: Ensure build-essential is installed. If configure fails, check for missing libraries (e.g., sudo apt install libncurses5-dev). Another option it to try and download a prebuilt wheel from the Ta-Lib repo.
+Import error: Verify with python -c "import talib; print(talib.__version__)".
 
 Step 6: Install Other Dependencies
 
