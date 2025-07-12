@@ -65,9 +65,9 @@ Use this command:
 
 
 Install pyenv:
-'''
-curl https://pyenv.run | bash
-'''
+
+    curl https://pyenv.run | bash
+
 Add to shell profile (add to ~/.bashrc or ~/.zshrc):
 > export PATH="$HOME/.pyenv/bin:$PATH"
 > 
