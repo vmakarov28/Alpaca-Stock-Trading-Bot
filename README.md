@@ -1,77 +1,62 @@
-# Alpaca-Stock-Trading-Bot
-Thought for 68s
-Alpaca Neural Bot v6.7
-
-Generated Image
-
-Generated Image
-
-Generated Image
 Description
 
 Alpaca Neural Bot v6.7 is an advanced AI-powered stock trading bot that leverages neural networks to predict market trends and execute trades via the Alpaca API. Built with PyTorch for GPU acceleration (optimized for NVIDIA RTX 5080), it incorporates technical indicators (via TA-Lib), sentiment analysis (using Transformers), and risk management features like trailing stops, drawdown limits, and volatility filters. The bot supports both backtesting on historical data (from 2015 to the current date) and live paper trading.
 
-Key capabilities:
+##Key capabilities
 
-    Neural Network Prediction: Uses a Conv1D + LSTM model to generate buy/sell signals based on historical and real-time data.
-    Sentiment Analysis: Integrates DistilBERT for news sentiment scoring.
-    Backtesting: Simulates trades with transaction costs, ATR-based stops, and performance metrics (Sharpe ratio, max drawdown).
-    Live Trading: Executes market orders during open hours, with email notifications for trades and summaries.
-    Multi-Symbol Support: Trades multiple stocks (e.g., SPY, MSFT, AAPL) in parallel using multiprocessing.
-    GPU Acceleration: Fully utilizes CUDA for faster training on RTX 5080.
-    Free Tier Compatible: Designed for Alpaca's free API tier, with retry logic for rate limits.
+Neural Network Prediction: Uses a Conv1D + LSTM model to generate buy/sell signals based on historical and real-time data.
+Sentiment Analysis: Integrates DistilBERT for news sentiment scoring.
+Backtesting: Simulates trades with transaction costs, ATR-based stops, and performance metrics (Sharpe ratio, max drawdown).
+Live Trading: Executes market orders during open hours, with email notifications for trades and summaries.
+Multi-Symbol Support: Trades multiple stocks (e.g., SPY, MSFT, AAPL) in parallel using multiprocessing.
+GPU Acceleration: Fully utilizes CUDA for faster training on RTX 5080.
+Free Tier Compatible: Designed for Alpaca's free API tier, with retry logic for rate limits.
 
 This bot is for educational and testing purposes only. Use paper trading to avoid financial risk.
 Features
 
-    Data Fetching: Retrieves 15-minute bars from Alpaca API, cached for efficiency.
-    Indicators: Calculates RSI, MACD, ATR, ADX, Volatility, BBands, Stoch, and more using TA-Lib.
-    Model Training: Trains per-symbol models with early stopping, data augmentation (noise), and Xavier initialization.
-    Risk Management: Enforces max drawdown, position sizing based on ATR/risk percentage, trailing stops.
-    Notifications: Sends email updates for trades, failures, and summaries via Gmail SMTP.
-    Backtest Mode: Computes total return, Sharpe ratio, max drawdown, win rate per symbol.
-    Live Mode: Runs every 15 minutes during market hours, with countdown timer.
-    Force Train: Option to retrain models instead of using cache.
-    Error Handling: Retries API calls, validates data, logs trades.
+Data Fetching: Retrieves 15-minute bars from Alpaca API, cached for efficiency.
+Indicators: Calculates RSI, MACD, ATR, ADX, Volatility, BBands, Stoch, and more using TA-Lib.
+Model Training: Trains per-symbol models with early stopping, data augmentation (noise), and Xavier initialization.
+Risk Management: Enforces max drawdown, position sizing based on ATR/risk percentage, trailing stops.
+Notifications: Sends email updates for trades, failures, and summaries via Gmail SMTP.
+Backtest Mode: Computes total return, Sharpe ratio, max drawdown, win rate per symbol.
+Live Mode: Runs every 15 minutes during market hours, with countdown timer.
+Force Train: Option to retrain models instead of using cache.
+Error Handling: Retries API calls, validates data, logs trades.
 
-Prerequisites
+##Prerequisites
 
-    Hardware: NVIDIA GPU (RTX 5080 recommended for CUDA acceleration). At least 16GB VRAM for efficient training.
-    Operating System: Windows Subsystem for Linux (WSL2) on Windows 10/11, or native Ubuntu 22.04+.
-    Alpaca Account: Free account with paper trading enabled. Get API keys from Alpaca Dashboard.
-    Gmail Account: For email notifications (enable "Less secure app access" or use app password).
-    Internet: Stable connection for API calls (no VPN recommended to avoid rate limits).
+Hardware: NVIDIA GPU (RTX 5080 recommended for CUDA acceleration). At least 16GB VRAM for efficient training.
+Operating System: Windows Subsystem for Linux (WSL2) on Windows 10/11, or native Ubuntu 22.04+.
+Alpaca Account: Free account with paper trading enabled. Get API keys from Alpaca Dashboard.
+Gmail Account: For email notifications (enable "Less secure app access" or use app password).
+Internet: Stable connection for API calls (no VPN recommended to avoid rate limits).
 
-Installation Steps
+#Installation Steps
 
 Follow these steps in order to set up the environment. All commands are for WSL/Ubuntu terminal.
 Step 1: Set Up WSL (Windows Users Only)
 
 If you're on Windows, enable WSL2 for Linux-based setup.
 
-    Open PowerShell as Administrator:
-    text
-
+Open PowerShell as Administrator:
+text
+'''
 wsl --install
-Install Ubuntu (default distribution):
-text
 wsl --install -d Ubuntu
-Set WSL2 as default:
-text
 wsl --set-default-version 2
-Launch Ubuntu and set up username/password.
-Update packages:
-text
+sudo apt update && sudo apt upgrade -y
+'''
 
-    sudo apt update && sudo apt upgrade -y
-    Restart your PC if prompted.
+Restart your PC if prompted.
 
-Troubleshooting:
+###Troubleshooting:
 
-    If WSL installation fails, enable "Virtual Machine Platform" in Windows Features (Control Panel > Programs > Turn Windows features on/off).
-    Check WSL version: wsl --list --verbose. Ensure Ubuntu is on version 2.
+If WSL installation fails, enable "Virtual Machine Platform" in Windows Features (Control Panel > Programs > Turn Windows features on/off).
+Check WSL version: wsl --list --verbose. Ensure Ubuntu is on version 2.
 
-Step 2: Install pyenv for Python Management
+##Step 2: Install pyenv for Python Management
 
 pyenv allows isolated Python environments.
 
