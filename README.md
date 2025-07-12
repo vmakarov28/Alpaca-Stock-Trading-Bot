@@ -59,8 +59,10 @@ Check WSL version: wsl --list --verbose. Ensure Ubuntu is on version 2.
 Pyenv allows isolated Python environments.
 
 ### Install dependencies for Pyenv:
-
- 'sudo apt install -y build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev python3-openssl git'
+Use this command:
+'''
+sudo apt install -y build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev python3-openssl git
+'''
 
 Install pyenv:
 '''
