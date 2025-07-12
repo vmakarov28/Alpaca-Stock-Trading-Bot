@@ -123,7 +123,8 @@ Update the package list:
     
 Install the CUDA toolkit for WSL-Ubuntu:
 Add the NVIDIA CUDA repository: Follow the instructions at https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64&Distribution=WSL-Ubuntu&target_version=2.0.
-Select "WSL-Ubuntu" > "2.0" > "x86_64" and copy the provided commands:
+> Select "WSL-Ubuntu" > "2.0" > "x86_64"
+Then copy and run the provided commands:
 
         wget https://developer.download.nvidia.com/compute/cuda/repos/wsl-ubuntu/x86_64/cuda-keyring_1.1-1_all.deb
         sudo dpkg -i cuda-keyring_1.1-1_all.deb
