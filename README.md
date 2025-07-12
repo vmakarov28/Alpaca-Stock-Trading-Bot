@@ -154,11 +154,11 @@ Update your environment: Add to ~/.bashrc (run `nano ~/.bashrc`):
     export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
         Save and run source ~/.bashrc.
 
-Step 4: Verify Installation and Run the Program
+Verify Installation and Run the Program
 
-In WSL, install PyTorch with CUDA support: `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128` (use cu128 for CUDA 12.8; adjust if your version differs).
+- In WSL, install PyTorch with CUDA support: `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128` (use cu128 for CUDA 12.8; adjust if your version differs).
 
-Test CUDA: Run `python -c "import torch; print(torch.cuda.is_available())"`. It should return True.
+- Test CUDA: Run `python -c "import torch; print(torch.cuda.is_available())"`. It should return True.
 
 Troubleshooting
 
