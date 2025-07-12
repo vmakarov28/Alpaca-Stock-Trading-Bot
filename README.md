@@ -12,8 +12,9 @@ Multi-Symbol Support: Trades multiple stocks (e.g., SPY, MSFT, AAPL) in parallel
 GPU Acceleration: Fully utilizes CUDA for faster training on RTX 5080.
 Free Tier Compatible: Designed for Alpaca's free API tier, with retry logic for rate limits.
 
-This bot is for educational and testing purposes only. Use paper trading to avoid financial risk.
-Features
+***This bot is for educational and testing purposes only. Use paper trading to avoid financial risk.***
+
+##Features
 
 Data Fetching: Retrieves 15-minute bars from Alpaca API, cached for efficiency.
 Indicators: Calculates RSI, MACD, ATR, ADX, Volatility, BBands, Stoch, and more using TA-Lib.
