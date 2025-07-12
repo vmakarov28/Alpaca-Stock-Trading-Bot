@@ -114,22 +114,13 @@ Troubleshooting:
     If build fails, ensure all dependencies from Step 1 are installed.
 
 
-Step 4: Install NVIDIA Drivers, CUDA, and cuDNN
+# Step 4: Install NVIDIA Drivers, CUDA, and cuDNN
 
-For RTX 5080 GPU support.
-
-    Install NVIDIA drivers (576.57+):
-        Download from NVIDIA Website.
-        Select GeForce RTX 50 Series, RTX 5080, Ubuntu.
-        Run the installer:
-        text
-
-    sudo bash NVIDIA-Linux-x86_64-<version>.run
 
 Install CUDA Toolkit 12.8:
 
-    Download from NVIDIA CUDA Downloads.
-    Select Linux, x86_64, Ubuntu 22.04, runfile (local).
+> Download from NVIDIA CUDA Downloads.
+> Select Linux, x86_64, Ubuntu 22.04, runfile (local).
     Run:
     text
 
