@@ -92,7 +92,7 @@ Verify Pyenv was setup correcty with:
 If pyenv not found, restart terminal or run exec $SHELL.
 Error with dependencies: Re-run sudo apt install command.
 
-### Step 3: Set Up Python Environment
+## Step 3: Set Up Python Environment
 
 Use Python 3.10.12 (compatible with dependencies).
 Install Python 3.10:
@@ -114,7 +114,7 @@ Troubleshooting:
     If build fails, ensure all dependencies from Step 1 are installed.
 
 
-Step 4: Install CUDA Toolkit in WSL
+## Step 4: Install CUDA Toolkit in WSL
 
 Open your WSL terminal (e.g., Ubuntu): Run wsl in Command Prompt or search for "Ubuntu" in the Start menu.
 Update the package list:
@@ -131,12 +131,12 @@ Select "WSL-Ubuntu" > "2.0" > "x86_64" and copy the provided commands:
         sudo apt-get install cuda-toolkit-12-6  # Replace 12-6 with the latest version, e.g., 12-5 if needed
 Verify CUDA installation: Run `nvcc --version` in WSL. It should display the CUDA version.
 
-Step 3: Install cuDNN in WSL
+## Step 5: Install cuDNN in WSL
 
-    Download cuDNN from the NVIDIA Developer website: https://developer.nvidia.com/rdp/cudnn-download.
-        Sign up for an NVIDIA Developer account if you don't have one (free).
-        Select cuDNN for CUDA 12.x (matching your toolkit version) and "Linux" (x86_64).
-        Download the tar file (e.g., cudnn-linux-x86_64-9.x.x.xx_cuda12-archive.tar.xz).
+Download cuDNN from the NVIDIA Developer website: https://developer.nvidia.com/rdp/cudnn-download.
+- You made need to sign up for an NVIDIA Developer account if you don't have one (free).
+- Select cuDNN for CUDA 12.x (matching your toolkit version) and "Linux" (x86_64).
+- Download the tar file (e.g., cudnn-linux-x86_64-9.x.x.xx_cuda12-archive.tar.xz).
     In WSL, extract and install cuDNN:
         Copy the downloaded file to WSL (e.g., via /mnt/c/Users/YourUsername/Downloads/).
         Run:
