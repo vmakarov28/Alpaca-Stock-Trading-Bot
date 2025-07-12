@@ -68,18 +68,21 @@ Install pyenv:
 
     curl https://pyenv.run | bash
 
-Add to shell profile (add to ~/.bashrc or ~/.zshrc):
+Add to shell profile (add to ~/.bashrc or ~/.zshrc). Open the file with the nano text editor with this command:
+
+    nano ~/.bashrc
+Then add the new paths to the file.
 > export PATH="$HOME/.pyenv/bin:$PATH"
 > 
 > eval "$(pyenv init --path)"
 > 
 > eval "$(pyenv virtualenv-init -)"
 > 
-Reload shell:
-text
-source ~/.bashrc
-Verify:
-text
+Press Cntrl + O to save and Cntrl + X to exit the file.
+Now back in the command line refresh the file with:
+
+    source ~/.bashrc
+Verify Pyenv was setup correcty with:
 
     pyenv --version
 
