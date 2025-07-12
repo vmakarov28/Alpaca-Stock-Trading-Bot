@@ -204,8 +204,9 @@ Install Python wrapper:
     pip install TA-Lib==0.4.32
 
 Troubleshooting
-Build error: Ensure build-essential is installed. If configure fails, check for missing libraries (e.g., sudo apt install libncurses5-dev). Another option it to try and download a prebuilt wheel from the Ta-Lib repo.
-Import error: Verify with python -c "import talib; print(talib.__version__)".
+
+- Build error: Ensure build-essential is installed. If configure fails, check for missing libraries (e.g., sudo apt install libncurses5-dev). Another option it to try and download a prebuilt wheel from the Ta-Lib repo.
+- Import error: Verify with python -c "import talib; print(talib.__version__)".
 
 Step 6: Install Other Dependencies
 
