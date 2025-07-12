@@ -180,9 +180,9 @@ Expected: Shows PyTorch version (e.g., 2.4.1+cu128), True, and "NVIDIA GeForce R
 ### Troubleshooting
 
 
-False for CUDA: Ensure NVIDIA drivers are installed (Step 8).
-Wrong device: Verify nvidia-smi shows RTX 5080.
-Installation error: Check PyTorch index URL for CUDA version compatibility.
+- False for CUDA: Ensure NVIDIA drivers are installed.
+- Wrong device: Verify nvidia-smi shows RTX 5080.
+- Installation error: Check PyTorch index URL for CUDA version compatibility.
 
 ## Step 6: Install TA-Lib
 
