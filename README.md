@@ -160,11 +160,10 @@ Verify Installation and Run the Program
 
 - Test CUDA: Run `python -c "import torch; print(torch.cuda.is_available())"`. It should return True.
 
-Troubleshooting
-
-    If CUDA is not detected: Check nvidia-smi in WSL for GPU info.
-    Errors with versions: Ensure CUDA toolkit, cuDNN, and PyTorch match (e.g., all for CUDA 12.x).
-    For detailed guides: Refer to NVIDIA's CUDA on WSL user guide (linked above) or PyTorch installation docs at https://pytorch.org/get-started/locally/.
+### Troubleshooting
+If CUDA is not detected: Check nvidia-smi in WSL for GPU info.
+Errors with versions: Ensure CUDA toolkit, cuDNN, and PyTorch match (e.g., all for CUDA 12.x).
+For detailed guides: Refer to NVIDIA's CUDA on WSL user guide (linked above) or PyTorch installation docs at https://pytorch.org/get-started/locally/.
 
 
 
