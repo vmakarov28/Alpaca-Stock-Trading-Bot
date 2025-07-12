@@ -181,11 +181,11 @@ Verify PyTorch, CUDA, and GPU detection:
     python -c "import torch; print(torch.__version__); print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0))"
 Expected: Shows PyTorch version (e.g., 2.4.1+cu128), True, and "NVIDIA GeForce RTX _ _ _ _".
 
-Troubleshooting:
+### Troubleshooting
 
-    False for CUDA: Ensure NVIDIA drivers are installed (Step 8).
-    Wrong device: Verify nvidia-smi shows RTX 5080.
-    Installation error: Check PyTorch index URL for CUDA version compatibility.
+False for CUDA: Ensure NVIDIA drivers are installed (Step 8).
+Wrong device: Verify nvidia-smi shows RTX 5080.
+Installation error: Check PyTorch index URL for CUDA version compatibility.
 
 Step 5: Install TA-Lib
 
