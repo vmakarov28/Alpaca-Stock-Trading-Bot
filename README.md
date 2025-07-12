@@ -114,46 +114,53 @@ Troubleshooting:
     If build fails, ensure all dependencies from Step 1 are installed.
 
 
-# Step 4: Install NVIDIA Drivers, CUDA, and cuDNN
+Step 4: Install CUDA Toolkit in WSL
 
+Open your WSL terminal (e.g., Ubuntu): Run wsl in Command Prompt or search for "Ubuntu" in the Start menu.
+Update the package list: 'sudo apt update && sudo apt upgrade -y.'
+Install the CUDA toolkit for WSL-Ubuntu:
+Add the NVIDIA CUDA repository: Follow the instructions at https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64&Distribution=WSL-Ubuntu&target_version=2.0.
+Select "WSL-Ubuntu" > "2.0" > "x86_64" and copy the provided commands:
 
-Install CUDA Toolkit 12.8:
+        wget https://developer.download.nvidia.com/compute/cuda/repos/wsl-ubuntu/x86_64/cuda-keyring_1.1-1_all.deb
+        sudo dpkg -i cuda-keyring_1.1-1_all.deb
+        sudo apt-get update
+        sudo apt-get install cuda-toolkit-12-6  # Replace 12-6 with the latest version, e.g., 12-5 if needed
+    Verify CUDA installation: Run nvcc --version in WSL. It should display the CUDA version.
 
-> Download from NVIDIA CUDA Downloads.
-> Select Linux, x86_64, Ubuntu 22.04, runfile (local).
-    Run:
-    text
+Step 3: Install cuDNN in WSL
 
-sudo sh cuda_12.8.0_560.28.03_linux.run
-Add to PATH:
-text
+    Download cuDNN from the NVIDIA Developer website: https://developer.nvidia.com/rdp/cudnn-download.
+        Sign up for an NVIDIA Developer account if you don't have one (free).
+        Select cuDNN for CUDA 12.x (matching your toolkit version) and "Linux" (x86_64).
+        Download the tar file (e.g., cudnn-linux-x86_64-9.x.x.xx_cuda12-archive.tar.xz).
+    In WSL, extract and install cuDNN:
+        Copy the downloaded file to WSL (e.g., via /mnt/c/Users/YourUsername/Downloads/).
+        Run:
+        text
 
-    export PATH=/usr/local/cuda-12.8/bin${PATH:+:${PATH}}
-    export LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
-
-Install cuDNN 9.7.0 (for CUDA 12.8):
-
-    Download from NVIDIA cuDNN (requires account).
-    Select cuDNN for CUDA 12.x.
-    Extract and copy files:
-    text
-
-    tar -xvf cudnn-linux-x86_64-9.7.0.99_cuda12-archive.tar.xz
-    sudo cp cudnn-*-archive/include/* /usr/local/cuda/include
-    sudo cp cudnn-*-archive/lib/* /usr/local/cuda/lib64
+    tar -xvf cudnn-linux-x86_64-9.x.x.xx_cuda12-archive.tar.xz
+    sudo cp cudnn-*-archive/include/cudnn*.h /usr/local/cuda/include
+    sudo cp -P cudnn-*-archive/lib/libcudnn* /usr/local/cuda/lib64
     sudo chmod a+r /usr/local/cuda/include/cudnn*.h /usr/local/cuda/lib64/libcudnn*
 
-Verify CUDA and cuDNN:
+Update your environment: Add to ~/.bashrc (run nano ~/.bashrc):
 text
 
-    nvidia-smi
-    Expected: Shows RTX 5080, driver 576.57+, CUDA 12.8.
+    export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+        Save and run source ~/.bashrc.
 
-Troubleshooting:
+Step 4: Verify Installation and Run the Program
 
-    nvidia-smi not found: Reinstall drivers.
-    CUDA not detected: Add PATH/LD_LIBRARY_PATH to ~/.bashrc and source it.
-    cuDNN error: Verify version matches CUDA.
+    In WSL, install PyTorch with CUDA support: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 (use cu121 for CUDA 12.1; adjust if your version differs).
+    Test CUDA: Run python -c "import torch; print(torch.cuda.is_available())". It should return True.
+    Run your program: python your_script.py --backtest (ensure your PyTorch environment is activated if using one).
+
+Troubleshooting
+
+    If CUDA is not detected: Check nvidia-smi in WSL for GPU info.
+    Errors with versions: Ensure CUDA toolkit, cuDNN, and PyTorch match (e.g., all for CUDA 12.x).
+    For detailed guides: Refer to NVIDIA's CUDA on WSL user guide (linked above) or PyTorch installation docs at https://pytorch.org/get-started/locally/.
 
 
 
