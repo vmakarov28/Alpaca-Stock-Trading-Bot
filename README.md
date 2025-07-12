@@ -68,8 +68,11 @@ curl https://pyenv.run | bash
 '''
 Add to shell profile (add to ~/.bashrc or ~/.zshrc):
 > export PATH="$HOME/.pyenv/bin:$PATH"
+> 
 > eval "$(pyenv init --path)"
+> 
 > eval "$(pyenv virtualenv-init -)"
+> 
 Reload shell:
 text
 source ~/.bashrc
