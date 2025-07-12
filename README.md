@@ -154,12 +154,6 @@ Update your environment: Add to ~/.bashrc (run `nano ~/.bashrc`):
     export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
         Save and run source ~/.bashrc.
 
-Verify Installation and Run the Program
-
-- In WSL, install PyTorch with CUDA support: `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128` (use cu128 for CUDA 12.8; adjust if your version differs).
-
-- Test CUDA: Run `python -c "import torch; print(torch.cuda.is_available())"`. It should return True.
-
 ### Troubleshooting
 
 If CUDA is not detected: Check nvidia-smi in WSL for GPU info.
@@ -172,11 +166,11 @@ For detailed guides: Refer to NVIDIA's CUDA on WSL user guide (linked above) or 
 
     
 
-Step 5: Install PyTorch with confirm CUDA Support
+## Step 6: Install PyTorch with confirm CUDA Support
 
-For RTX 50 & 40 series GPU acceleration we will PyTorch for training the AI model:
+For RTX 50 & 40 series GPU acceleration we will PyTorch for training the AI model (use cu128 for CUDA 12.8; adjust if your version differs):
 
-    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128 
 
 Verify PyTorch, CUDA, and GPU detection:
 
