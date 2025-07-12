@@ -129,7 +129,7 @@ Select "WSL-Ubuntu" > "2.0" > "x86_64" and copy the provided commands:
         sudo dpkg -i cuda-keyring_1.1-1_all.deb
         sudo apt-get update
         sudo apt-get install cuda-toolkit-12-6  # Replace 12-6 with the latest version, e.g., 12-5 if needed
-Verify CUDA installation: Run 'nvcc --version' in WSL. It should display the CUDA version.
+Verify CUDA installation: Run `nvcc --version` in WSL. It should display the CUDA version.
 
 Step 3: Install cuDNN in WSL
 
