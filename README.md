@@ -28,12 +28,12 @@ Error Handling: Retries API calls, validates data, logs trades.
 
 ## Prerequisites
 
-Drivers: Install the latest nvidia drivers from nvdia app along with Cuda 12.8 and cuDNN.
-Hardware: NVIDIA GPU (Confirmed to work propperly on RTX 5080 but other 50 series and 40 series card are likley to work). At least 16GB VRAM for efficient training.
-Operating System: Windows Subsystem for Linux (WSL2) on Windows 10/11, or native Ubuntu 22.04+.
-Alpaca Account: Free account with paper trading enabled. Get API keys from Alpaca Dashboard.
-Gmail Account: For email notifications (enable "Less secure app access" or use app password).
-Internet: Stable connection for API calls (no VPN recommended to avoid rate limits).
+- Drivers: Install the latest nvidia drivers from nvdia app along with Cuda 12.8 and cuDNN.
+- Hardware: NVIDIA GPU (Confirmed to work propperly on RTX 5080 but other 50 series and 40 series card are likley to work). At least 16GB VRAM for efficient training.
+- Operating System: Windows Subsystem for Linux (WSL2) on Windows 10/11, or native Ubuntu 22.04+.
+- Alpaca Account: Free account with paper trading enabled. Get API keys from Alpaca Dashboard.
+- Gmail Account: For email notifications (enable "Less secure app access" or use app password).
+- Internet: Stable connection for API calls (no VPN recommended to avoid rate limits).
 
 
 # Installation Steps
