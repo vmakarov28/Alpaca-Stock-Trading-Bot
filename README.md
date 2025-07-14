@@ -57,6 +57,7 @@ Restart your PC if prompted.
 - Check WSL version: wsl --list --verbose. Ensure Ubuntu is on version 2.
 
 ## Step 2: Install pyenv for Python Management
+9From now on the rest of the steps will be completed in wsl)
 
 Pyenv allows isolated Python environments.
 
@@ -90,8 +91,8 @@ Verify Pyenv was setup correcty with:
     pyenv --version
 
 ### Troubleshooting:
-If pyenv not found, restart terminal or run exec $SHELL.
-Error with dependencies: Re-run sudo apt install command.
+- If pyenv not found, restart terminal or run exec $SHELL.
+- Error with dependencies: Re-run sudo apt install command.
 
 ## Step 3: Set Up Python Environment
 
@@ -111,7 +112,7 @@ Upgrade pip:
 
 Troubleshooting
 - If build fails, ensure all dependencies from Step 1 are installed.
-
+- Syntax Errors: Make sure all the paths are written properly with no mistakes.
 
 ## Step 4: Install CUDA Toolkit in WSL
 
