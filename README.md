@@ -267,8 +267,7 @@ If issues persist, check trades.log for details or open an issue on the GitHub r
 
 License
 GNU Lesser General Public License v2.1. See LICENSE for details.
-Author
 
-Vladimir Makarov
+Author: Vladimir Makarov
 
 GitHub: vmakarov28/Alpaca-Stock-Trading-Bot
