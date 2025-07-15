@@ -255,7 +255,7 @@ def fetch_recent_data(symbol: str, num_bars: int) -> pd.DataFrame:
     """Fetch recent bars for live trading."""
     client = StockHistoricalDataClient(CONFIG['ALPACA_API_KEY'], CONFIG['ALPACA_SECRET_KEY'])
     end_date = datetime.now()
-    start_date = end_date - timedelta(days=3)
+    start_date = end_date - timedelta(days=10)
     request = StockBarsRequest(
         symbol_or_symbols=symbol,
         timeframe=CONFIG['TIMEFRAME'],
@@ -360,6 +360,8 @@ def preprocess_data(df: pd.DataFrame, timesteps: int, add_noise: bool = False) -
     if add_noise:
         X += np.random.normal(0, 0.02, X.shape)
     
+    if X.shape[0] < timesteps:
+        return np.zeros((0, timesteps, X.shape[1])), np.array([])
     X_seq = np.lib.stride_tricks.sliding_window_view(X, (timesteps, X.shape[1])).reshape(-1, timesteps, X.shape[1])
     y_seq = y[timesteps:]
 
