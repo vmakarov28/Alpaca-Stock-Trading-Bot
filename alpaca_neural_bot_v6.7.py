@@ -99,13 +99,13 @@ CONFIG = {
     'EARLY_STOPPING_MIN_DELTA': 0.0005,  # Minimum delta for early stopping
 
     # API and Authentication - Credentials for API access
-    'ALPACA_API_KEY': 'REPLACE-ME',  # API key for Alpaca
-    'ALPACA_SECRET_KEY': 'REPLACE-ME',  # Secret key for Alpaca
+    'ALPACA_API_KEY': 'PK1A36K33FUZKR7OAJC2',  # API key for Alpaca
+    'ALPACA_SECRET_KEY': 'fid8r2QWmziK3zvN3HqgvuKJWux3HCUg6Jez39fY',  # Secret key for Alpaca
 
     # Email Notifications - Configuration for sending email alerts
-    'EMAIL_SENDER': 'REPLACE-ME@gmail.com',  # Email address for sending notifications
+    'EMAIL_SENDER': 'alpaca.ai.tradingbot@gmail.com',  # Email address for sending notifications
     'EMAIL_PASSWORD': 'hjdf sstp pyne rotq',  # Password for the email account
-    'EMAIL_RECEIVER': ['REPLACE-ME@gmail.com', 'REPLACE-ME@d125.org'],  # List of email recipients
+    'EMAIL_RECEIVER': ['aiplane.scientist@gmail.com', 'vmakarov28@students.d125.org', 'tchaikovskiy@hotmail.com'],  # List of email recipients
     'SMTP_SERVER': 'smtp.gmail.com',  # SMTP server for email
     'SMTP_PORT': 587,  # Port for SMTP server
 
@@ -514,6 +514,8 @@ def load_model_and_scaler(symbol: str, expected_features: int, force_train: bool
     if os.path.exists(model_path) and os.path.exists(scaler_path):
         model = build_model(CONFIG['TIMESTEPS'], expected_features)
         model.load_state_dict(torch.load(model_path))
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model.to(device)
         model.eval()
         with open(scaler_path, 'rb') as f:
             scaler = pickle.load(f)
