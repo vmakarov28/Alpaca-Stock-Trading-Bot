@@ -99,13 +99,13 @@ CONFIG = {
     'EARLY_STOPPING_MIN_DELTA': 0.0005,  # Minimum delta for early stopping
 
     # API and Authentication - Credentials for API access
-    'ALPACA_API_KEY': 'REPLACE-ME',  # API key for Alpaca
-    'ALPACA_SECRET_KEY': 'REPLACE-ME',  # Secret key for Alpaca
+    'ALPACA_API_KEY': 'PK1A36K33FUZKR7OAJC2',  # API key for Alpaca
+    'ALPACA_SECRET_KEY': 'fid8r2QWmziK3zvN3HqgvuKJWux3HCUg6Jez39fY',  # Secret key for Alpaca
 
     # Email Notifications - Configuration for sending email alerts
-    'EMAIL_SENDER': 'REPLACE-ME@gmail.com',  # Email address for sending notifications
+    'EMAIL_SENDER': 'alpaca.ai.tradingbot@gmail.com',  # Email address for sending notifications
     'EMAIL_PASSWORD': 'hjdf sstp pyne rotq',  # Password for the email account
-    'EMAIL_RECEIVER': ['REPLACE-ME@gmail.com', 'REPLACE-ME@d125.org'],  # List of email recipients
+    'EMAIL_RECEIVER': ['aiplane.scientist@gmail.com', 'vmakarov28@students.d125.org', 'tchaikovskiy@hotmail.com'],  # List of email recipients
     'SMTP_SERVER': 'smtp.gmail.com',  # SMTP server for email
     'SMTP_PORT': 587,  # Port for SMTP server
 
@@ -255,7 +255,7 @@ def fetch_recent_data(symbol: str, num_bars: int) -> pd.DataFrame:
     """Fetch recent bars for live trading."""
     client = StockHistoricalDataClient(CONFIG['ALPACA_API_KEY'], CONFIG['ALPACA_SECRET_KEY'])
     end_date = datetime.now()
-    start_date = end_date - timedelta(days=3)
+    start_date = end_date - timedelta(days=10)
     request = StockBarsRequest(
         symbol_or_symbols=symbol,
         timeframe=CONFIG['TIMEFRAME'],
@@ -360,6 +360,8 @@ def preprocess_data(df: pd.DataFrame, timesteps: int, add_noise: bool = False) -
     if add_noise:
         X += np.random.normal(0, 0.02, X.shape)
     
+    if X.shape[0] < timesteps:
+        return np.zeros((0, timesteps, X.shape[1])), np.array([])
     X_seq = np.lib.stride_tricks.sliding_window_view(X, (timesteps, X.shape[1])).reshape(-1, timesteps, X.shape[1])
     y_seq = y[timesteps:]
 
@@ -512,6 +514,8 @@ def load_model_and_scaler(symbol: str, expected_features: int, force_train: bool
     if os.path.exists(model_path) and os.path.exists(scaler_path):
         model = build_model(CONFIG['TIMESTEPS'], expected_features)
         model.load_state_dict(torch.load(model_path))
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model.to(device)
         model.eval()
         with open(scaler_path, 'rb') as f:
             scaler = pickle.load(f)
