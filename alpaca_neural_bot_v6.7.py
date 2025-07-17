@@ -838,6 +838,10 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
     if not backtest_only:
         portfolio_value = CONFIG['INITIAL_CASH']
         peak_value = portfolio_value
+        max_prices = {symbol: 0.0 for symbol in CONFIG['SYMBOLS']}
+        open_positions = trading_client.get_all_positions()
+        for pos in open_positions:
+            max_prices[pos.symbol] = float(pos.current_price)
 
         while True:
             clock = trading_client.get_clock()
@@ -880,19 +884,15 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
                             current_volatility = df['Volatility'].iloc[-1]
                             atr_val = df['ATR'].iloc[-1]
                             qty_owned = 0
-                            entry_time = None
                             entry_price = 0.0
-                            time_held = 0
                             position = next((pos for pos in open_positions if pos.symbol == symbol), None)
                             if position:
                                 qty_owned = int(float(position.qty))
-                                entry_time = pd.Timestamp(position.last_updated) if hasattr(position, 'last_updated') else now
                                 entry_price = float(position.avg_entry_price)
-                                time_held = (now - entry_time).total_seconds() / 60
 
                             decision = "Hold"
                             if current_volatility <= CONFIG['MAX_VOLATILITY'] and current_adx >= CONFIG['ADX_TREND_THRESHOLD']:
-                                if (prediction >= max(CONFIG['PREDICTION_THRESHOLD_BUY'], CONFIG['CONFIDENCE_THRESHOLD']) and current_rsi < CONFIG['RSI_BUY_THRESHOLD'] and current_adx > CONFIG['ADX_TREND_THRESHOLD']):
+                                if qty_owned == 0 and (prediction >= max(CONFIG['PREDICTION_THRESHOLD_BUY'], CONFIG['CONFIDENCE_THRESHOLD']) and current_rsi < CONFIG['RSI_BUY_THRESHOLD'] and current_adx > CONFIG['ADX_TREND_THRESHOLD']):
                                     decision = "Buy"
                                     cash = float(account.cash)
                                     max_qty = int(float(account.buying_power) / price)
@@ -914,6 +914,7 @@ Current Cash: ${cash:.2f}
 Portfolio Value: ${portfolio_value:.2f}
 """
                                             send_email(f"Trade Update: {symbol}", email_body)
+                                            max_prices[symbol] = price
                                         except Exception as e:
                                             logger.error(f"Failed to submit buy order for {symbol}: {str(e)}")
                                             decision = "Hold"
@@ -932,9 +933,9 @@ Portfolio Value: ${portfolio_value:.2f}
                                     else:
                                         decision = "Hold"
                                         logger.info(f"Buy skipped for {symbol}: Insufficient qty ({qty}) or buying power (cost={qty * price:.2f}, buying_power={float(account.buying_power):.2f})")
-                                elif qty_owned > 0 and time_held >= CONFIG['MIN_HOLDING_PERIOD_MINUTES']:
-                                    max_price = max(float(position.current_price), price) if position else price
-                                    trailing_stop = max_price * (1 - CONFIG['TRAILING_STOP_PERCENTAGE'])
+                                if qty_owned > 0:
+                                    max_prices[symbol] = max(max_prices[symbol], price)
+                                    trailing_stop = max_prices[symbol] * (1 - CONFIG['TRAILING_STOP_PERCENTAGE'])
                                     stop_loss = entry_price - CONFIG['STOP_LOSS_ATR_MULTIPLIER'] * atr_val
                                     take_profit = entry_price + CONFIG['TAKE_PROFIT_ATR_MULTIPLIER'] * atr_val
                                     if (price <= trailing_stop or price <= stop_loss or price >= take_profit or (prediction <= CONFIG['PREDICTION_THRESHOLD_SELL'] and current_rsi > CONFIG['RSI_SELL_THRESHOLD'])):
@@ -954,6 +955,7 @@ Current Cash: ${float(account.cash):.2f}
 Portfolio Value: ${portfolio_value:.2f}
 """
                                             send_email(f"Trade Update: {symbol}", email_body)
+                                            max_prices[symbol] = 0.0
                                         except Exception as e:
                                             logger.error(f"Failed to submit sell order for {symbol}: {str(e)}")
                                             decision = "Hold"
@@ -965,7 +967,6 @@ RSI: {current_rsi:.2f}
 ADX: {current_adx:.2f}
 Volatility: {current_volatility:.2f}
 ATR: {atr_val:.2f}
-Time Held: {time_held:.2f} minutes
 Current Cash: ${float(account.cash):.2f}
 Portfolio Value: ${portfolio_value:.2f}
 """
