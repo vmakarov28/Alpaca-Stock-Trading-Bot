@@ -352,7 +352,7 @@ def preprocess_data(df: pd.DataFrame, timesteps: int, add_noise: bool = False) -
         'close', 'high', 'low', 'volume', 'MA20', 'MA50', 'RSI',
         'MACD', 'MACD_signal', 'OBV', 'VWAP', 'ATR', 'CMF', 'Close_ATR',
         'MA20_ATR', 'Return_1d', 'Return_5d', 'Volatility', 'BB_upper',
-        'BB_lower', 'Stoch_K', 'Stoch_D', 'ADX', 'Sentiment'
+        'BB_lower', 'Stoch_K', 'Stoch_D', 'ADX'
     ]
     X = df[features].values
     y = df['Trend'].values
@@ -775,7 +775,7 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
     validate_config(CONFIG)
     create_cache_directory()
     trading_client = TradingClient(CONFIG['ALPACA_API_KEY'], CONFIG['ALPACA_SECRET_KEY'], paper=True)
-    expected_features = 24
+    expected_features = 23
     models = {}
     scalers = {}
     dfs = {}
@@ -898,6 +898,7 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
                                     max_qty = int(float(account.buying_power) / price)
                                     risk_amount = cash * CONFIG['RISK_PERCENTAGE']
                                     qty = max(1, int(min(risk_amount / (atr_val * CONFIG['STOP_LOSS_ATR_MULTIPLIER']), max_qty)))
+                                    qty = min(qty, int(portfolio_value * 0.1 / price))
                                     logger.info(f"Buy attempt for {symbol}: qty={qty}, cash={cash:.2f}, buying_power={float(account.buying_power):.2f}, cost={qty * price:.2f}, atr_val={atr_val:.2f}")
                                     if qty > 0 and (qty * price) <= float(account.buying_power):
                                         order = MarketOrderRequest(symbol=symbol, qty=qty, side=OrderSide.BUY, time_in_force=TimeInForce.GTC)
@@ -950,7 +951,6 @@ RSI: {current_rsi:.2f}
 ADX: {current_adx:.2f}
 Volatility: {current_volatility:.2f}
 ATR: {atr_val:.2f}
-Time Held: {time_held:.2f} minutes
 Current Cash: ${float(account.cash):.2f}
 Portfolio Value: ${portfolio_value:.2f}
 """
