@@ -101,7 +101,7 @@ CONFIG = {
     'EARLY_STOPPING_MONITOR': 'val_loss',  # Metric to monitor for early stopping
     'EARLY_STOPPING_PATIENCE': 15,  # Patience for early stopping
     'EARLY_STOPPING_MIN_DELTA': 0.0005,  # Minimum delta for early stopping
-    'NUM_TRIALS': 50, #Number of trails conducted during study
+    'NUM_TRIALS': 2,  # Number of Optuna trials
 
     # API and Authentication - Credentials for API access
     'ALPACA_API_KEY': 'PK1A36K33FUZKR7OAJC2',  # API key for Alpaca
@@ -138,7 +138,7 @@ CONFIG = {
     'ANOMALY_VOL_MULTIPLIER': 3.0,  # Multiplier for anomaly detection
 
     # Sentiment Analysis - Settings for sentiment analysis
-    'SENTIMENT_MODEL': 'distilbert-base-uncased-finetuned-sst-2-english',  # Model for sentiment analysis
+    'SENTIMENT_MODEL': 'ProsusAI/finbert',  # Model for sentiment analysis
 
     # API Retry Settings - Configuration for handling API failures
     'API_RETRY_ATTEMPTS': 3,  # Number of retry attempts for API calls
@@ -550,7 +550,7 @@ def objective(trial, symbol, X, y):
 
 def optimize_hyperparameters(symbol: str, X: np.ndarray, y: np.ndarray):
     study = optuna.create_study(direction='minimize')
-    study.optimize(lambda trial: objective(trial, symbol, X, y), n_trials = CONFIG['NUM_TRIALS'])
+    study.optimize(lambda trial: objective(trial, symbol, X, y), n_trials=50)
     return study.best_params
 
 def train_model(symbol: str, X: np.ndarray, y: np.ndarray, epochs: int, batch_size: int, lr: float = 0.001, weight_decay: float = 0.005, accum_steps: int = 1) -> Tuple[nn.Module, StandardScaler, float]:
