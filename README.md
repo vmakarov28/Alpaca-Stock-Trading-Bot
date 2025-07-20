@@ -261,6 +261,9 @@ Troubleshooting
 - Model Training Hangs: Reduce batch size in CONFIG (line 75) to 16 if GPU memory is low. Monitor with nvidia-smi.
 - Backtest IndexError: Clear cache with `rm -rf ./cache` and re-run to fetch data up to today.
 - Email Failure: Ensure Gmail app password is used (not regular password). Test SMTP with a simple script.
+Ensure all dependency files are installed:
+    `pip install --upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128`
+    `pip install --upgrade alpaca-py transformers pandas numpy scikit-learn ta-lib tenacity tqdm colorama protobuf==5.28.3`
 
 If issues persist, check trades.log for details or open an issue on the GitHub repo.
 
