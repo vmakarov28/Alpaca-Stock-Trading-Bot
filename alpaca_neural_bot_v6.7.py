@@ -69,6 +69,7 @@ from arch import arch_model
 from imblearn.over_sampling import SMOTE
 from statsmodels.tsa.stattools import coint
 from scipy.stats import norm
+from torch.cuda.amp import autocast, GradScaler
 
 # Suppress PyTorch warnings
 warnings.filterwarnings('ignore', category=UserWarning)
@@ -538,9 +539,10 @@ class TQDMCallback:
 def objective(trial, symbol, X, y):
     lr = trial.suggest_float('lr', 1e-5, 1e-2, log=True)
     weight_decay = trial.suggest_float('weight_decay', 1e-5, 1e-1, log=True)
-    batch_size = trial.suggest_int('batch_size', 16, 64)
+    batch_size = trial.suggest_int('batch_size', 32, 256)  # Expanded range for higher utilization
+    accum_steps = trial.suggest_int('accum_steps', 1, 8)  # New param for gradient accumulation
     # Train and evaluate
-    _, _, val_loss = train_model(symbol, X, y, CONFIG['TRAIN_EPOCHS'], batch_size, lr, weight_decay)
+    _, _, val_loss = train_model(symbol, X, y, CONFIG['TRAIN_EPOCHS'], batch_size, lr, weight_decay, accum_steps)
     return val_loss
 
 def optimize_hyperparameters(symbol: str, X: np.ndarray, y: np.ndarray):
@@ -548,7 +550,7 @@ def optimize_hyperparameters(symbol: str, X: np.ndarray, y: np.ndarray):
     study.optimize(lambda trial: objective(trial, symbol, X, y), n_trials=50)
     return study.best_params
 
-def train_model(symbol: str, X: np.ndarray, y: np.ndarray, epochs: int, batch_size: int, lr: float = 0.001, weight_decay: float = 0.005) -> Tuple[nn.Module, StandardScaler, float]:
+def train_model(symbol: str, X: np.ndarray, y: np.ndarray, epochs: int, batch_size: int, lr: float = 0.001, weight_decay: float = 0.005, accum_steps: int = 1) -> Tuple[nn.Module, StandardScaler, float]:
     """Train the PyTorch model with early stopping and logging."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Training model for {symbol} on device: {device}")
@@ -574,13 +576,14 @@ def train_model(symbol: str, X: np.ndarray, y: np.ndarray, epochs: int, batch_si
     y_val_tensor = torch.tensor(y_val, dtype=torch.float32).reshape(-1, 1).to(device)
 
     train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=False)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
     val_dataset = TensorDataset(X_val_tensor, y_val_tensor)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, num_workers=0, pin_memory=False)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, num_workers=4, pin_memory=True)
 
     model = build_model(X.shape[1], X.shape[2]).to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     criterion = nn.BCEWithLogitsLoss()
+    scaler_amp = GradScaler()  # For AMP
 
     best_val_loss = float('inf')
     patience_counter = 0
@@ -591,21 +594,26 @@ def train_model(symbol: str, X: np.ndarray, y: np.ndarray, epochs: int, batch_si
     for epoch in range(epochs):
         model.train()
         train_loss = 0.0
-        for batch_x, batch_y in train_loader:
-            optimizer.zero_grad()
-            outputs = model(batch_x)
-            loss = criterion(outputs, batch_y.repeat(1, 2))
-            loss.backward()
-            optimizer.step()
-            train_loss += loss.item() * batch_x.size(0)
+        optimizer.zero_grad()  # Zero at start of epoch or per accumulation cycle
+        for i, (batch_x, batch_y) in enumerate(train_loader):
+            with autocast():  # Enable mixed precision
+                outputs = model(batch_x)
+                loss = criterion(outputs, batch_y.repeat(1, 2)) / accum_steps  # Normalize loss
+            scaler_amp.scale(loss).backward()
+            if (i + 1) % accum_steps == 0 or (i + 1) == len(train_loader):  # Update every accum_steps
+                scaler_amp.step(optimizer)
+                scaler_amp.update()
+                optimizer.zero_grad()
+            train_loss += loss.item() * batch_x.size(0) * accum_steps  # Adjust for normalization
         train_loss /= len(train_loader.dataset)
 
         model.eval()
         val_loss = 0.0
         with torch.no_grad():
             for batch_x, batch_y in val_loader:
-                outputs = model(batch_x)
-                loss = criterion(outputs, batch_y.repeat(1, 2))
+                with autocast():  # Enable mixed precision for validation
+                    outputs = model(batch_x)
+                    loss = criterion(outputs, batch_y.repeat(1, 2))
                 val_loss += loss.item() * batch_x.size(0)
         val_loss /= len(val_loader.dataset)
 
@@ -967,7 +975,7 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
     need_training = any(load_model_and_scaler(symbol, expected_features, force_train)[0] is None for symbol in CONFIG['SYMBOLS'])
     progress_bar = tqdm(total=total_epochs, desc="Training Progress", bar_format="{l_bar}\033[32m{bar}\033[0m{r_bar}") if need_training else None
 
-    mp.set_start_method('spawn', force=True)
+    mp.set_start_method('forkserver', force=True)
 
     pool = mp.Pool(processes=min(mp.cpu_count(), len(CONFIG['SYMBOLS'])))
     results = [pool.apply_async(train_symbol, args=(symbol, expected_features, force_train)) for symbol in CONFIG['SYMBOLS']]
