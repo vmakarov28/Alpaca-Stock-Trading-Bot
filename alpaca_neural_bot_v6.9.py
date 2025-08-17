@@ -30,9 +30,6 @@
 # | - GitHub: https://github.com/vmakarov28/Alpaca-Stock-Trading-Bot/tree/main   |
 # |                                                                              |
 # +------------------------------------------------------------------------------+
-# Add emergency stop feature to prevent overfitting during training
-# Does a buy command if no positions are owned and a hold is ordered
-# Better Email Updates
 # Updated for LINUX with PyTorch for RTX 5080 GPU acceleration
 
 import os
