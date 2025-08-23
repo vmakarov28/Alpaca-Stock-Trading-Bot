@@ -1,6 +1,6 @@
 
 # +------------------------------------------------------------------------------+
-# |                            Alpaca Neural Bot v6.9                            |
+# |                            Alpaca Neural Bot v8.0                            |
 # +------------------------------------------------------------------------------+
 # | Author: Vladimir Makarov                                                     |
 # | Project Start Date: May 9, 2025                                              |
@@ -31,6 +31,8 @@
 # |                                                                              |
 # +------------------------------------------------------------------------------+
 # Updated for LINUX with PyTorch for RTX 5080 GPU acceleration
+#Activate virtu= environment: pyenv activate pytorch_env
+#Run with: python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v8.py --backtest --force-train
 
 import os
 import sys
@@ -96,8 +98,8 @@ CONFIG = {
     'EARLY_STOPPING_MIN_DELTA': 0.0005,  # Minimum delta for early stopping
 
     # API and Authentication - Credentials for API access
-    'ALPACA_API_KEY': 'PK1A36K33FUZKR7OAJC2',  # API key for Alpaca
-    'ALPACA_SECRET_KEY': 'fid8r2QWmziK3zvN3HqgvuKJWux3HCUg6Jez39fY',  # Secret key for Alpaca
+    'ALPACA_API_KEY': 'PK8CS035OBP8PPNJG9BD',  # API key for Alpaca
+    'ALPACA_SECRET_KEY': 'BcsW3T3GJJMnJ9ZPTei87VUU7KM38YYRvIVr6M2I',  # Secret key for Alpaca
 
     # Email Notifications - Configuration for sending email alerts
     'EMAIL_SENDER': 'alpaca.ai.tradingbot@gmail.com',  # Email address for sending notifications
@@ -381,7 +383,7 @@ class TradingModel(nn.Module):
         self.dense2 = nn.Linear(256, 128)
         self.dense3 = nn.Linear(128, 1)
         self.relu = nn.ReLU()
-        self.dropout = nn.Dropout(0.3)  # Reduced dropout rate
+        self.dropout = nn.Dropout(0.2)  # Reduced dropout to allow better learning
         nn.init.xavier_uniform_(self.dense1.weight)
         nn.init.xavier_uniform_(self.dense2.weight)
         nn.init.xavier_uniform_(self.dense3.weight)
@@ -448,7 +450,8 @@ def train_model(symbol: str, X: np.ndarray, y: np.ndarray, epochs: int, batch_si
     val_loader = DataLoader(val_dataset, batch_size=batch_size, num_workers=0, pin_memory=False)
 
     model = build_model(X.shape[1], X.shape[2]).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=0.005, weight_decay=0.01)
+
+    optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)  # Reduced LR and weight decay for better convergence
     criterion = nn.BCEWithLogitsLoss()
 
     best_val_loss = float('inf')
@@ -477,6 +480,8 @@ def train_model(symbol: str, X: np.ndarray, y: np.ndarray, epochs: int, batch_si
                 loss = criterion(outputs, batch_y)
                 val_loss += loss.item() * batch_x.size(0)
         val_loss /= len(val_loader.dataset)
+
+        logger.info(f"Epoch {epoch+1}/{epochs}: train_loss={train_loss:.4f}, val_loss={val_loss:.4f}")  # Added logging for monitoring
 
         if val_loss < best_val_loss - min_delta:
             best_val_loss = val_loss
@@ -576,14 +581,11 @@ def backtest(
             outputs = torch.sigmoid(outputs)
             predictions.extend(outputs.cpu().numpy().flatten())
             del outputs  # Explicitly delete outputs tensor
+
     predictions = np.array(predictions)
-    # Normalize predictions to [0, 1]
-    if np.isclose(predictions.max(), predictions.min()):
-        logger.warning(f"All predictions for {symbol} are identical. Setting to 0.5 for testing.")
-        predictions = np.full_like(predictions, 0.5)
-    else:
-        predictions = (predictions - predictions.min()) / (predictions.max() - predictions.min() + 1e-8)
-    logger.info(f"Predictions for {symbol}: min={predictions.min():.3f}, max={predictions.max():.3f}, mean={predictions.mean():.3f}")
+    logger.info(f"Raw sigmoid predictions for {symbol}: min={predictions.min():.3f}, max={predictions.max():.3f}, mean={predictions.mean():.3f}")  # Added logging for raw predictions
+    # Removed normalization: Use raw probabilities directly for better calibration with thresholds
+    logger.info(f"Using raw predictions for {symbol} (no normalization applied)")
     
     # Clean up CUDA tensors
     del X_tensor
