@@ -31,7 +31,7 @@
 # |                                                                              |
 # +------------------------------------------------------------------------------+
 # Updated for LINUX with PyTorch for RTX 5080 GPU acceleration
-#Activate virtu= environment: pyenv activate pytorch_env
+#Activate virtul environment: pyenv activate pytorch_env
 #Run with: python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v8.py --backtest --force-train
 
 import os
