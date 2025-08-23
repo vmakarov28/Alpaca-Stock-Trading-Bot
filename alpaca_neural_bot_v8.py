@@ -98,13 +98,13 @@ CONFIG = {
     'EARLY_STOPPING_MIN_DELTA': 0.0005,  # Minimum delta for early stopping
 
     # API and Authentication - Credentials for API access
-    'ALPACA_API_KEY': 'PK8CS035OBP8PPNJG9BD',  # API key for Alpaca
-    'ALPACA_SECRET_KEY': 'BcsW3T3GJJMnJ9ZPTei87VUU7KM38YYRvIVr6M2I',  # Secret key for Alpaca
+    'ALPACA_API_KEY': 'REPLACEME',  # API key for Alpaca
+    'ALPACA_SECRET_KEY': 'REPLACEME',  # Secret key for Alpaca
 
     # Email Notifications - Configuration for sending email alerts
     'EMAIL_SENDER': 'alpaca.ai.tradingbot@gmail.com',  # Email address for sending notifications
     'EMAIL_PASSWORD': 'hjdf sstp pyne rotq',  # Password for the email account
-    'EMAIL_RECEIVER': ['aiplane.scientist@gmail.com', 'vmakarov28@students.d125.org', 'tchaikovskiy@hotmail.com'],  # List of email recipients
+    'EMAIL_RECEIVER': ['REPLACEME', 'REPLACEME', 'REPLACEME'],  # List of email recipients
     'SMTP_SERVER': 'smtp.gmail.com',  # SMTP server for email
     'SMTP_PORT': 587,  # Port for SMTP server
 
