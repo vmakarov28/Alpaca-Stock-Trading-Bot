@@ -31,7 +31,7 @@
 # |                                                                              |
 # +------------------------------------------------------------------------------+
 # Updated for LINUX with PyTorch for RTX 5080 GPU acceleration
-#Activate virtul environment: pyenv activate pytorch_env
+#Activate virtu= environment: pyenv activate pytorch_env
 #Run with: python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v8.py --backtest --force-train
 
 import os
@@ -98,13 +98,13 @@ CONFIG = {
     'EARLY_STOPPING_MIN_DELTA': 0.0005,  # Minimum delta for early stopping
 
     # API and Authentication - Credentials for API access
-    'ALPACA_API_KEY': 'REPLACEME',  # API key for Alpaca
-    'ALPACA_SECRET_KEY': 'REPLACEME',  # Secret key for Alpaca
+    'ALPACA_API_KEY': 'PK8CS035OBP8PPNJG9BD',  # API key for Alpaca
+    'ALPACA_SECRET_KEY': 'BcsW3T3GJJMnJ9ZPTei87VUU7KM38YYRvIVr6M2I',  # Secret key for Alpaca
 
     # Email Notifications - Configuration for sending email alerts
     'EMAIL_SENDER': 'alpaca.ai.tradingbot@gmail.com',  # Email address for sending notifications
     'EMAIL_PASSWORD': 'hjdf sstp pyne rotq',  # Password for the email account
-    'EMAIL_RECEIVER': ['REPLACEME', 'REPLACEME', 'REPLACEME'],  # List of email recipients
+    'EMAIL_RECEIVER': ['aiplane.scientist@gmail.com', 'vmakarov28@students.d125.org', 'tchaikovskiy@hotmail.com'],  # List of email recipients
     'SMTP_SERVER': 'smtp.gmail.com',  # SMTP server for email
     'SMTP_PORT': 587,  # Port for SMTP server
 
@@ -133,6 +133,7 @@ CONFIG = {
     # API Retry Settings - Configuration for handling API failures
     'API_RETRY_ATTEMPTS': 3,  # Number of retry attempts for API calls
     'API_RETRY_DELAY': 1000,  # Delay between retry attempts in milliseconds
+    'DEBUG_MODE': False,  # Debug mode: True for verbose output, False for clean beginner-friendly U
 }
 
 #pyenv activate pytorch_env
@@ -148,6 +149,9 @@ stream_handler = logging.StreamHandler()
 stream_handler.setFormatter(formatter)
 root_logger.addHandler(file_handler)
 root_logger.addHandler(stream_handler)
+
+if not CONFIG.get('DEBUG_MODE', True):
+    stream_handler.setLevel(logging.WARNING)  # Suppress INFO logs in console (still written to file)
 
 logger = logging.getLogger(__name__)
 
@@ -587,6 +591,12 @@ def backtest(
     # Removed normalization: Use raw probabilities directly for better calibration with thresholds
     logger.info(f"Using raw predictions for {symbol} (no normalization applied)")
     
+    k_start = 0  # Define starting index for backtest simulation
+    
+    pbar = None
+    if not CONFIG['DEBUG_MODE']:
+        pbar = tqdm(total=len(predictions) - k_start, desc=f"Backtesting {symbol}", leave=True)
+    
     # Clean up CUDA tensors
     del X_tensor
     if torch.cuda.is_available():
@@ -650,8 +660,13 @@ def backtest(
                 entry_time = ts
                 cash -= cost
                 logger.info(f"{ts}: Bought {qty} shares of {symbol} at ${price:.2f}, cash: ${cash:.2f}")
+                if CONFIG['DEBUG_MODE']:
+                    print(f"{ts}: Bought {qty} shares of {symbol} at ${price:.2f}, cash: ${cash:.2f}")
+                if pbar and not CONFIG['DEBUG_MODE']:
+                    pbar.set_postfix(status="Bought", cash=f"${cash:.2f}")  # Simplified postfix for clean UI
             else:
-                logger.info(f"Insufficient cash to buy {qty} shares of {symbol}: cash={cash:.2f}, cost={cost:.2f}")
+                if CONFIG['DEBUG_MODE']:
+                    logger.info(f"Insufficient cash to buy {qty} shares of {symbol}: cash={cash:.2f}, cost={cost:.2f}")
 
         elif position > 0:
             if price > max_price:
@@ -673,13 +688,26 @@ def backtest(
                     if ret > 0:
                         winning_trades += 1
                     logger.info(f"{ts}: Sold {position} shares of {symbol} at ${price:.2f}, return: {ret:.3f}, cash: ${cash:.2f}")
+                    if CONFIG['DEBUG_MODE']:
+                        print(f"{ts}: Sold {position} shares of {symbol} at ${price:.2f}, return: {ret:.3f}, cash: ${cash:.2f}")
+                    if pbar and not CONFIG['DEBUG_MODE']:
+                        pbar.set_postfix(status="Sold", cash=f"${cash:.2f}")  # Simplified postfix
                     position = 0
                     logger.info(f"After sell: position={position}, cash={cash:.2f}")
                     entry_time = None
                     max_price = 0.0
+                else:
+                    if pbar and not CONFIG['DEBUG_MODE']:
+                        pbar.set_postfix(status="Holding")  # Simplified: Remove detailed metrics for less clutter
 
         else:
-            logger.info(f"Skipped buy for {symbol}: pred={pred:.3f}, rsi={current_rsi:.2f}, adx={current_adx:.2f}, volatility={current_volatility:.2f}, qty={qty}, cost={qty * price:.2f}, cash={cash:.2f}")
+            if CONFIG['DEBUG_MODE']:
+                logger.info(f"Skipped buy for {symbol}: pred={pred:.3f}, rsi={current_rsi:.2f}, adx={current_adx:.2f}, volatility={current_volatility:.2f}, qty={qty}, cost={qty * price:.2f}, cash={cash:.2f}")
+            if pbar and not CONFIG['DEBUG_MODE']:
+                pbar.set_postfix(status="Skipped")  # Simplified: Remove metrics to reduce clutter
+
+    if pbar:
+        pbar.close()
 
     if position > 0:
         cash += position * prices[-1] - transaction_cost_per_trade
@@ -688,6 +716,9 @@ def backtest(
         trade_count += 1
         if ret > 0:
             winning_trades += 1
+        logger.info(f"Final close: Sold {position} shares of {symbol} at ${prices[-1]:.2f}, return: {ret:.3f}")
+        if CONFIG['DEBUG_MODE']:
+            print(f"Final close: Sold {position} shares of {symbol} at ${prices[-1]:.2f}, return: {ret:.3f}")
     win_rate = (winning_trades / trade_count * 100) if trade_count > 0 else 0.0
     return cash, returns, trade_count, win_rate
 
@@ -795,6 +826,10 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
     # Get the results
     outputs = [res.get() for res in results]
 
+    symbol_pbar = None
+    if not CONFIG['DEBUG_MODE']:
+        symbol_pbar = tqdm(total=len(CONFIG['SYMBOLS']), desc="Processing symbols", bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]")
+
     # Enhanced CUDA cleanup
     pool.terminate()  # Terminate pool to release resources
     del results  # Delete results reference
@@ -804,32 +839,36 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
         time.sleep(2)  # Allow GPU to stabilize
         logger.info("CUDA memory cleared after multiprocessing.")
 
-    for symbol, df, model, scaler, data_loaded, sentiment, sentiment_loaded, model_loaded in outputs:
-        dfs[symbol] = df
-        models[symbol] = model
-        scalers[symbol] = scaler
-        info = []
-        info.append(f"{Fore.LIGHTBLUE_EX}{symbol}:{Style.RESET_ALL}")
-        info.append(f"  {'Loaded cached model and scaler' if model_loaded else 'Trained model'} for {symbol}.")
-        info.append(f"  {'Loaded' if data_loaded else 'Fetched'} {len(df)} bars for {symbol} {'from cache' if data_loaded else ''}.")
-        info.append(f"  {'Loaded news data' if sentiment_loaded else 'Computed news sentiment'} for {symbol} {'from cache' if sentiment_loaded else ''}.")
-        info.append(f"  Calculated sentiment score: {sentiment:.3f}")
-        info.append(f"  Calculated stop-loss ATR multiplier: {CONFIG['STOP_LOSS_ATR_MULTIPLIER']:.2f}")
-        try:
-            position = trading_client.get_open_position(symbol)
-            qty_owned = int(float(position.qty))
-            info.append(f"  Current amount of stocks owned: {qty_owned}")
-        except:
-            qty_owned = 0
-            info.append(f"  Current amount of stocks owned: {qty_owned}")
-        if not model_loaded:
-            info.append(f"  Saved model and scaler for {symbol}.")
-        stock_info.append(info)
-        if progress_bar and not model_loaded:
-            progress_bar.update(CONFIG['TRAIN_EPOCHS'])
+        for symbol, df, model, scaler, data_loaded, sentiment, sentiment_loaded, model_loaded in outputs:
+            dfs[symbol] = df
+            models[symbol] = model
+            scalers[symbol] = scaler
+            info = []
+            info.append(f"{Fore.LIGHTBLUE_EX}{symbol}:{Style.RESET_ALL}")
+            info.append(f"  {'Loaded cached model and scaler' if model_loaded else 'Trained model'} for {symbol}.")
+            info.append(f"  {'Loaded' if data_loaded else 'Fetched'} {len(df)} bars for {symbol} {'from cache' if data_loaded else ''}.")
+            info.append(f"  {'Loaded news data' if sentiment_loaded else 'Computed news sentiment'} for {symbol} {'from cache' if sentiment_loaded else ''}.")
+            info.append(f"  Calculated sentiment score: {sentiment:.3f}")
+            info.append(f"  Calculated stop-loss ATR multiplier: {CONFIG['STOP_LOSS_ATR_MULTIPLIER']:.2f}")
+            try:
+                position = trading_client.get_open_position(symbol)
+                qty_owned = int(float(position.qty))
+                info.append(f"  Current amount of stocks owned: {qty_owned}")
+            except:
+                qty_owned = 0
+                info.append(f"  Current amount of stocks owned: {qty_owned}")
+            if not model_loaded:
+                info.append(f"  Saved model and scaler for {symbol}.")
+            stock_info.append(info)
+            if progress_bar and not model_loaded:
+                progress_bar.update(CONFIG['TRAIN_EPOCHS'])
+            if symbol_pbar:
+                symbol_pbar.update(1)
 
     if progress_bar:
         progress_bar.close()
+    if symbol_pbar:
+        symbol_pbar.close()
 
     for info in stock_info:
         for line in info:
@@ -1019,6 +1058,15 @@ Portfolio Value: ${portfolio_value:.2f}
         email_body = format_email_body(initial_cash, final_value, symbol_results, trade_counts, win_rates)
         send_email("Backtest Completed", email_body)
         logger.info(f"Backtest completed: Final value: ${final_value:.2f}")
+        if not CONFIG['DEBUG_MODE']:
+            print("\nBacktest Summary:")
+            print(f"Final Portfolio Value: ${final_value:.2f}")
+            print(f"Initial Cash: ${initial_cash:.2f}")
+            print("Per Symbol Performance:")
+            for symbol in CONFIG['SYMBOLS']:
+                if symbol in symbol_results:
+                    metrics = symbol_results[symbol]
+                    print(f"  {symbol}: Trades={trade_counts.get(symbol, 0)}, Win Rate={win_rates.get(symbol, 0):.1f}%, Sharpe Ratio={metrics.get('sharpe_ratio', 0):.2f}, Max Drawdown={metrics.get('max_drawdown', 0):.2f}%")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Trading bot with backtest mode")
