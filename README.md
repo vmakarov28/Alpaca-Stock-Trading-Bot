@@ -159,7 +159,8 @@ Verify CUDA installation: Run `nvcc --version` in WSL. It should display the CUD
 Download cuDNN from the NVIDIA Developer website: https://developer.nvidia.com/rdp/cudnn-download.
 - You made need to sign up for an NVIDIA Developer account if you don't have one (free).
 - Select cuDNN for CUDA 12.x (matching your toolkit version) and "Linux" (x86_64).
-- Download the tar file (e.g., cudnn-linux-x86_64-9.x.x.xx_cuda12-archive.tar.xz).
+- Select Linux > x86_64 > Ubuntu > 24.04 (Yours may varry) > deb (local) > FULL
+- Download the deb file (e.g., cudnn-local-repo-ubuntu2404-9.12.0_1.0-1_amd64.deb).
     In WSL, extract and install cuDNN:
         Copy the downloaded file to WSL (e.g., via /mnt/c/Users/YourUsername/Downloads/).
   
