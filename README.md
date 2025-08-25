@@ -91,6 +91,13 @@ Verify Pyenv was setup correcty with:
     pyenv --version
 
 ### Troubleshooting:
+- If "Unable to locate package llvm" use:
+  
+        sudo add-apt-repository universe
+        sudo apt update
+  then re-attempt the command:
+
+      sudo apt install -y make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev python3-openssl git
 - If pyenv not found, restart terminal or run exec $SHELL.
 - Error with dependencies: Re-run sudo apt install command.
 
