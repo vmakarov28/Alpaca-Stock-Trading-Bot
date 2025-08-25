@@ -57,7 +57,7 @@ Restart your PC if prompted.
 - Check WSL version: wsl --list --verbose. Ensure Ubuntu is on version 2.
 
 ## Step 2: Install pyenv for Python Management
-9From now on the rest of the steps will be completed in wsl)
+**From now on the rest of the steps will be completed in wsl**
 
 Pyenv allows isolated Python environments.
 
