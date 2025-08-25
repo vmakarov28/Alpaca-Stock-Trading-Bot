@@ -98,13 +98,6 @@ Expected output: `pyenv 2.6.7` (Latest as of 8/24/25)
   then re-attempt the command:
 
       sudo apt install -y make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev python3-openssl git
-- If you get ``pyenv activate' requires Pyenv and Pyenv-Virtualenv to be loaded into your shell.
-Check your shell configuration and Pyenv and Pyenv-Virtualenv installation instructions.`` When using the command `pyenv activate pytorch_env` Run each line individually:
-
-        echo 'eval "$(pyenv init -)"' >> ~/.bashrc
-        eval "$(pyenv init -)"
-        source ~/.bashrc
-  then reattempt `pyenv activate pytorch_env`
 - If pyenv not found, restart terminal or run exec $SHELL.
 - Error with dependencies: Re-run sudo apt install command.
 
@@ -125,6 +118,13 @@ Upgrade pip:
     pip install --upgrade pip
 
 Troubleshooting
+- If you get ``pyenv activate' requires Pyenv and Pyenv-Virtualenv to be loaded into your shell.
+Check your shell configuration and Pyenv and Pyenv-Virtualenv installation instructions.`` When using the command `pyenv activate pytorch_env` Run each line individually:
+
+        echo 'eval "$(pyenv init -)"' >> ~/.bashrc
+        eval "$(pyenv init -)"
+        source ~/.bashrc
+  then reattempt `pyenv activate pytorch_env`
 - If build fails, ensure all dependencies from Step 1 are installed.
 - Syntax Errors: Make sure all the paths are written properly with no mistakes.
 
