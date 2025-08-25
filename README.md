@@ -145,11 +145,12 @@ Then copy and run the provided commands:
         sudo dpkg -i cuda-keyring_1.1-1_all.deb
         sudo apt-get update
         sudo apt-get install cuda-toolkit-12-6  # Replace 12-6 with the latest version, e.g., 12-5 if needed
-Add new paths to bash by running these commmands:
+Add new paths to bash by running these commmands one by one:
 
         echo 'export PATH=/usr/local/cuda/bin:$PATH' >> ~/.bashrc
         echo 'export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
         echo 'export PATH=/usr/lib/wsl/lib:$PATH' >> ~/.bashrc
+        source ~/.bashrc
 
 Verify CUDA installation: Run `nvcc --version` in WSL. It should display the CUDA version.
 
