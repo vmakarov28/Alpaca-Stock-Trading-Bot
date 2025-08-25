@@ -133,7 +133,7 @@ Check your shell configuration and Pyenv and Pyenv-Virtualenv installation instr
 Open your WSL terminal (e.g., Ubuntu): Run wsl in Command Prompt or search for "Ubuntu" in the Start menu.
 Update the package list:
 
-    sudo apt update && sudo apt upgrade -y.'
+    sudo apt update && sudo apt upgrade -y
     
 Install the CUDA toolkit for WSL-Ubuntu:
 Add the NVIDIA CUDA repository: Follow the instructions at https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64&Distribution=WSL-Ubuntu&target_version=2.0.
