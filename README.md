@@ -89,7 +89,7 @@ Now back in the command line refresh the file with:
 Verify Pyenv was setup correcty with:
 
     pyenv --version
-
+Expected output: `pyenv 2.6.7` (Latest as of 8/24/25)
 ### Troubleshooting:
 - If "Unable to locate package llvm" use:
   
