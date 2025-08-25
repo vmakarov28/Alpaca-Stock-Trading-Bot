@@ -82,7 +82,7 @@ Then add the new paths to the file.
 > 
 > eval "$(pyenv virtualenv-init -)"
 > 
-Press Cntrl + O to save and Cntrl + X to exit the file.
+Press Cntrl + O then Enter to save and Cntrl + X to exit the file.
 Now back in the command line refresh the file with:
 
     source ~/.bashrc
