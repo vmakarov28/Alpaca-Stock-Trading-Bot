@@ -164,20 +164,25 @@ Download cuDNN from the NVIDIA Developer website: https://developer.nvidia.com/r
     In WSL, extract and install cuDNN:
         Copy the downloaded file to WSL (e.g., via /mnt/c/Users/YourUsername/Downloads/).
   
-Run:
+Run each command sequentially (**in pyenv**:
 ```
-    tar -xvf cudnn-linux-x86_64-9.x.x.xx_cuda12-archive.tar.xz
-    sudo cp cudnn-*-archive/include/cudnn*.h /usr/local/cuda/include
-    sudo cp -P cudnn-*-archive/lib/libcudnn* /usr/local/cuda/lib64
-    sudo chmod a+r /usr/local/cuda/include/cudnn*.h /usr/local/cuda/lib64/libcudnn*
+cd /mnt/c/Users/YOUR USER/Downloads
+sudo dpkg -i cudnn-local-repo-ubuntu2404-9.12.0_1.0-1_amd64.deb
+sudo cp /var/cudnn-local-repo-ubuntu2404-9.12.0/cudnn-local-*-keyring.gpg /usr/share/keyrings/
+sudo apt update
+sudo apt install -y libcudnn9-cuda-12 libcudnn9-dev-cuda-12 libcudnn9-static-cuda-12
+echo 'export LD_LIBRARY_PATH=/usr/lib/cuda/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
+source ~/.bashrc
 ```
-Update your environment: Add to ~/.bashrc (run `nano ~/.bashrc`):
-
->export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
->Save and run source ~/.bashrc.
 
 ### Troubleshooting
+- Run:
 
+      wget https://developer.download.nvidia.com/compute/cudnn/9.12.0/local_installers/cudnn-local-repo-ubuntu2404-9.12.0_1.0-1_amd64.deb
+      sudo dpkg -i cudnn-local-repo-ubuntu2404-9.12.0_1.0-1_amd64.deb
+      sudo cp /var/cudnn-local-repo-ubuntu2404-9.12.0/cudnn-*-keyring.gpg /usr/share/keyrings/
+      sudo apt-get update
+      sudo apt-get -y install cudnn
 - If CUDA is not detected: Check nvidia-smi in WSL for GPU info.
 - Errors with versions: Ensure CUDA toolkit, cuDNN, and PyTorch match (e.g., all for CUDA 12.x).
 - For detailed guides: Refer to NVIDIA's CUDA on WSL user guide (linked above) or PyTorch installation docs at https://pytorch.org/get-started/locally/.
