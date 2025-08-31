@@ -12,7 +12,7 @@
 # | - numpy (Numerical computations)                                             |
 # | - pandas (Data manipulation)                                                 |
 # | - alpaca-py (Alpaca integration, imports as 'alpaca')                        |
-# | - transformers (Sentiment analysis)                                          |
+# | - transformers (Sentiment analysis)  (REMOVED)                               |
 # | - scikit-learn (Machine learning utilities)                                  |
 # | - ta-lib (Technical analysis)                                                |
 # | - tenacity (Retry logic)                                                     |
@@ -21,7 +21,7 @@
 # | - tqdm (Progress bars)                                                       |
 # | - colorama (Console formatting)                                              |
 # | Install using: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128 |
-# |                pip install alpaca-py transformers pandas numpy scikit-learn ta-lib tenacity tqdm colorama |
+|                pip install alpaca-py pandas numpy scikit-learn ta-lib tenacity tqdm colorama |
 # |                pip install protobuf==5.28.3                                  |
 # |                                                                              |
 # | Double check before starting:                                                |
@@ -50,7 +50,7 @@ from alpaca.data.requests import StockBarsRequest
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import MarketOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
-from transformers import pipeline
+#from transformers import pipeline
 from sklearn.preprocessing import StandardScaler
 import smtplib
 from email.mime.text import MIMEText
@@ -98,8 +98,8 @@ CONFIG = {
     'EARLY_STOPPING_MIN_DELTA': 0.0005,  # Minimum delta for early stopping
 
     # API and Authentication - Credentials for API access
-    'ALPACA_API_KEY': 'PKF0P2VS849R0PSTCMM7',  # API key for Alpaca
-    'ALPACA_SECRET_KEY': 'xLii0eiYsDEh6FLuEi5t2BPzcY74fsFfrrqwcFDK',  # Secret key for Alpaca
+    'ALPACA_API_KEY': 'PKEILCZUL5LIOG92HNTZ',  # API key for Alpaca
+    'ALPACA_SECRET_KEY': 'hluGeGPYq9PpJFMpbf5cn0VGdD6NRsoEs21GNU8T',  # Secret key for Alpaca
 
     # Email Notifications - Configuration for sending email alerts
     'EMAIL_SENDER': 'alpaca.ai.tradingbot@gmail.com',  # Email address for sending notifications
@@ -120,20 +120,20 @@ CONFIG = {
 
     # Strategy Thresholds - Thresholds for trading decisions
     'CONFIDENCE_THRESHOLD': 0.5,  # Threshold for prediction confidence
-    'PREDICTION_THRESHOLD_BUY': 0.6,  # Threshold for buy signal
-    'PREDICTION_THRESHOLD_SELL': 0.20,  # Threshold for sell signal
-    'RSI_BUY_THRESHOLD': 45,  # RSI threshold for buying 54 is optimal
-    'RSI_SELL_THRESHOLD': 55,  # RSI threshold for selling^50
+    'PREDICTION_THRESHOLD_BUY': 0.55,  # Threshold for buy signal
+    'PREDICTION_THRESHOLD_SELL': 0.45,  # Threshold for sell signal
+    'RSI_BUY_THRESHOLD': 65,  # RSI threshold for buying 54 is optimal
+    'RSI_SELL_THRESHOLD': 45,  # RSI threshold for selling^50
     'ADX_TREND_THRESHOLD': 25,  # Threshold for ADX trend strength
     'MAX_VOLATILITY': 10,  # Maximum allowed volatility
 
     # Sentiment Analysis - Settings for sentiment analysis
-    'SENTIMENT_MODEL': 'distilbert-base-uncased-finetuned-sst-2-english',  # Model for sentiment analysis
+    #'SENTIMENT_MODEL': 'distilbert-base-uncased-finetuned-sst-2-english',  # Model for sentiment analysis
 
     # API Retry Settings - Configuration for handling API failures
     'API_RETRY_ATTEMPTS': 3,  # Number of retry attempts for API calls
     'API_RETRY_DELAY': 1000,  # Delay between retry attempts in milliseconds
-    'DEBUG_MODE': True,  # Debug mode: True for verbose output, False for clean beginner-friendly U
+    'DEBUG_MODE': True,  # Debug mode: True for verbose output, False for clean beginner-friendly UI
 }
 # transformers import pipeline
 #pipe = pipeline('sentiment-analysis', device='cuda:0')  # Or the appropriate task name
@@ -160,13 +160,13 @@ if not CONFIG.get('DEBUG_MODE', True):
 logger = logging.getLogger(__name__)
 
 # Initialize sentiment analysis pipeline
-sentiment_pipeline = pipeline("sentiment-analysis", model=CONFIG['SENTIMENT_MODEL'], framework="pt", device='cuda:0') #Updated for Linux 24.04.03 Ubuntu with RTX 5080 GPU
+#sentiment_pipeline = pipeline("sentiment-analysis", model=CONFIG['SENTIMENT_MODEL'], framework="pt", device='cuda:0') #Updated for Linux 24.04.03 Ubuntu with RTX 5080 GPU
 
 
 def check_dependencies() -> None:
     """Check for required Python modules."""
     required_modules = [
-        'torch', 'numpy', 'pandas', 'alpaca', 'transformers',
+        'torch', 'numpy', 'pandas', 'alpaca',
         'sklearn', 'talib', 'tenacity', 'smtplib', 'argparse', 'tqdm', 'colorama'
     ]
     for module in required_modules:
@@ -327,15 +327,18 @@ def fetch_data(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
     df = bars.reset_index().rename(columns={'vwap': 'VWAP'})
     logger.info(f"Fetched {len(df)} recent bars for {symbol}")
     return df.sort_values('timestamp')
-
+"""
 def load_news_sentiment(symbol: str) -> Tuple[float, bool]:
-    """Compute real-time news sentiment using a pre-trained model or random for testing."""
+    #Compute real-time news sentiment using a pre-trained model or random for testing.
     cache_file = os.path.join(CONFIG['CACHE_DIR'], f"{symbol}_news_sentiment.pkl")
     # Force new sentiment calculation by ignoring cache
     sentiment_score = np.random.uniform(-1.0, 1.0)  # Random sentiment for testing
     with open(cache_file, 'wb') as f:
         pickle.dump(sentiment_score, f)
     return sentiment_score, False
+"""
+
+
 
 def calculate_indicators(df: pd.DataFrame, sentiment: float) -> pd.DataFrame:
     """Calculate technical indicators."""
@@ -366,7 +369,7 @@ def calculate_indicators(df: pd.DataFrame, sentiment: float) -> pd.DataFrame:
         df['high'], df['low'], df['close'], fastk_period=14, slowk_period=3, slowd_period=3
     )
     df['ADX'] = talib.ADX(df['high'], df['low'], df['close'], timeperiod=14)
-    df['Sentiment'] = sentiment
+    #df['Sentiment'] = sentiment
     df['Trend'] = np.where(df['close'] > df['MA20'], 1, 0)
     
     indicator_cols = [
@@ -401,34 +404,19 @@ def validate_indicators(df: pd.DataFrame, symbol: str) -> None:
         raise ValueError(f"Missing indicator columns for {symbol}: {missing}")
 
 def preprocess_data(df: pd.DataFrame, timesteps: int, add_noise: bool = False) -> Tuple[np.ndarray, np.ndarray]:
-    """Preprocess data into sequences."""
-    df = df.copy()
-    df.ffill(inplace=True)
-    df.fillna(0, inplace=True)
-    
-    features = [
-        'close', 'high', 'low', 'volume', 'MA20', 'MA50', 'RSI',
-        'MACD', 'MACD_signal', 'OBV', 'VWAP', 'ATR', 'CMF', 'Close_ATR',
-        'MA20_ATR', 'Return_1d', 'Return_5d', 'Volatility', 'BB_upper',
-        'BB_lower', 'Stoch_K', 'Stoch_D', 'ADX'
-    ]
-    X = df[features].values
-    y = df['Trend'].values
-    
+    """Preprocess data for model input."""
+    features = ['open', 'high', 'low', 'close', 'volume', 'VWAP', 'EMA_12', 'EMA_26', 'MACD', 'MACD_signal', 'RSI', 'ATR', 'ADX', 'OBV', 'CCI', 'ROC', 'MOM', 'Bollinger_upper', 'Bollinger_middle', 'Bollinger_lower', 'Stochastic_K', 'Stochastic_D', 'Williams_R', 'Volatility']
+    X = []
+    y = []
+    for i in range(timesteps, len(df)):
+        X.append(df[features].iloc[i - timesteps:i].values)
+        y.append(1 if df['close'].iloc[i] > df['close'].iloc[i - 1] else 0)
+    X = np.array(X)
+    y = np.array(y)
     if add_noise:
-        X += np.random.normal(0, 0.02, X.shape)
-    
-    if X.shape[0] < timesteps:
-        return np.zeros((0, timesteps, X.shape[1])), np.array([])
-    X_seq = np.lib.stride_tricks.sliding_window_view(X, (timesteps, X.shape[1])).reshape(-1, timesteps, X.shape[1])
-    y_seq = y[timesteps:]
-
-    if len(X_seq) > len(y_seq):
-        X_seq = X_seq[:len(y_seq)]
-    elif len(y_seq) > len(X_seq):
-        y_seq = y_seq[:len(X_seq)]
-
-    return X_seq, y_seq
+        noise = np.random.normal(0, 0.01, X.shape)
+        X += noise
+    return X, y
 
 def test_predictions_shape():
     # Mock model output as (5,1) array
@@ -599,12 +587,12 @@ def train_symbol(symbol, expected_features, force_train):
     """Train or load model for a given symbol."""
     df, data_loaded = load_or_fetch_data(symbol, CONFIG['TRAIN_DATA_START_DATE'], datetime.now().strftime('%Y-%m-%d'))
     validate_raw_data(df, symbol)
-    sentiment, sentiment_loaded = load_news_sentiment(symbol)
+    #sentiment, sentiment_loaded = load_news_sentiment(symbol)
     
     df = df.set_index(pd.to_datetime(df['timestamp'], utc=True))
     train_end = pd.to_datetime(CONFIG['BACKTEST_START_DATE'], utc=True)
     df_train = df[df.index < train_end].copy()
-    sentiment, sentiment_loaded = load_news_sentiment(symbol)
+    #sentiment, sentiment_loaded = load_news_sentiment(symbol)
     df_train = calculate_indicators(df_train, sentiment)
     validate_indicators(df_train, symbol)
     X, y = preprocess_data(df_train, CONFIG['TIMESTEPS'], add_noise=True)
@@ -622,7 +610,7 @@ def train_symbol(symbol, expected_features, force_train):
         del X, y
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-    return symbol, df, model, scaler, data_loaded, sentiment, sentiment_loaded, model_loaded
+    return symbol, df, model, scaler, data_loaded, model_loaded
 
 def backtest(symbol: str, model: nn.Module, scaler: StandardScaler, df: pd.DataFrame,
             initial_cash: float, stop_loss_atr_multiplier: float, take_profit_atr_multiplier: float,
@@ -850,7 +838,7 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
     validate_config(CONFIG)
     create_cache_directory()
     trading_client = TradingClient(CONFIG['ALPACA_API_KEY'], CONFIG['ALPACA_SECRET_KEY'], paper=True)
-    expected_features = 23
+    expected_features = 22
     models = {}
     scalers = {}
     dfs = {}
@@ -860,6 +848,12 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
     progress_bar = tqdm(total=total_epochs, desc="Training Progress", bar_format="{l_bar}\033[32m{bar}\033[0m{r_bar}") if need_training and force_train else None
 
     mp.set_start_method('spawn', force=True)
+    import random
+    np.random.seed(42)
+    torch.manual_seed(42)
+    random.seed(42)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(42)
 
     pool = mp.Pool(processes=min(mp.cpu_count(), len(CONFIG['SYMBOLS'])))
     results = [pool.apply_async(train_symbol, args=(symbol, expected_features, force_train)) for symbol in CONFIG['SYMBOLS']]
@@ -882,7 +876,7 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
         logger.info("CUDA memory cleared after multiprocessing.")
 
         
-        for symbol, df, model, scaler, data_loaded, sentiment, sentiment_loaded, model_loaded in outputs:
+        for symbol, df, model, scaler, data_loaded, model_loaded in outputs:
             dfs[symbol] = df
             models[symbol] = model
             scalers[symbol] = scaler
@@ -890,8 +884,8 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
             info.append(f"{Fore.LIGHTBLUE_EX}{symbol}:{Style.RESET_ALL}")
             info.append(f"  {'Loaded cached model and scaler' if model_loaded else 'Trained model'} for {symbol}.")
             info.append(f"  {'Loaded' if data_loaded else 'Fetched'} {len(df)} bars for {symbol} {'from cache' if data_loaded else ''}.")
-            info.append(f"  {'Loaded news data' if sentiment_loaded else 'Computed news sentiment'} for {symbol} {'from cache' if sentiment_loaded else ''}.")
-            info.append(f"  Calculated sentiment score: {sentiment:.3f}")
+            #info.append(f"  {'Loaded news data' if sentiment_loaded else 'Computed news sentiment'} for {symbol} {'from cache' if sentiment_loaded else ''}.")
+            #info.append(f"  Calculated sentiment score: {sentiment:.3f}")
             info.append(f"  Calculated stop-loss ATR multiplier: {CONFIG['STOP_LOSS_ATR_MULTIPLIER']:.2f}")
             try:
                 position = trading_client.get_open_position(symbol)
@@ -954,11 +948,11 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
                 for symbol in CONFIG['SYMBOLS']:
                     if symbol in models:
                         df = fetch_recent_data(symbol, CONFIG['LIVE_DATA_BARS'])
-                        sentiment = load_news_sentiment(symbol)[0]
-                        df = calculate_indicators(df, sentiment)
+                        #sentiment = load_news_sentiment(symbol)[0]
+                        #df = calculate_indicators(df, sentiment)
                         X, _ = preprocess_data(df, CONFIG['TIMESTEPS'], add_noise=False)
-                        sentiment, sentiment_loaded = load_news_sentiment(symbol)
-                        df = calculate_indicators(df, sentiment)
+                        #sentiment, sentiment_loaded = load_news_sentiment(symbol)
+                        #df = calculate_indicators(df, sentiment)
                         validate_indicators(df, symbol)
                         df = df.set_index(pd.to_datetime(df['timestamp'], utc=True))
                         train_end = pd.to_datetime(CONFIG['BACKTEST_START_DATE'], utc=True)
