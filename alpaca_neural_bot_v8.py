@@ -21,7 +21,7 @@
 # | - tqdm (Progress bars)                                                       |
 # | - colorama (Console formatting)                                              |
 # | Install using: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128 |
-|                pip install alpaca-py pandas numpy scikit-learn ta-lib tenacity tqdm colorama |
+# |                pip install alpaca-py pandas numpy scikit-learn ta-lib tenacity tqdm colorama |
 # |                pip install protobuf==5.28.3                                  |
 # |                                                                              |
 # | Double check before starting:                                                |
