@@ -1,11 +1,11 @@
 
 # +------------------------------------------------------------------------------+
-# |                            Alpaca Neural Bot v8.0                            |
+# |                            Alpaca Neural Bot v8.1                            |
 # +------------------------------------------------------------------------------+
 # | Author: Vladimir Makarov                                                     |
 # | Project Start Date: May 9, 2025                                              |
 # | License: GNU Lesser General Public License v2.1                              |
-# | Version: 4 (Un-Released)                                                     |
+# | Version: 8.1 (Un-Released)                                                   |
 # |                                                                              |
 # | Dependencies:                                                                |
 # | - torch (Neural network framework)                                           |
@@ -39,31 +39,31 @@ import sys
 import logging
 import argparse
 import importlib
-import numpy as np
-import pandas as pd
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
-from alpaca.data import StockHistoricalDataClient, TimeFrame, TimeFrameUnit
-from alpaca.data.requests import StockBarsRequest
-from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import MarketOrderRequest
-from alpaca.trading.enums import OrderSide, TimeInForce
-from transformers import pipeline
-from sklearn.preprocessing import StandardScaler
+import numpy as np # pyright: ignore[reportMissingImports]
+import pandas as pd # pyright: ignore[reportMissingModuleSource]
+import torch # pyright: ignore[reportMissingImports]
+import torch.nn as nn # pyright: ignore[reportMissingImports]
+import torch.optim as optim # pyright: ignore[reportMissingImports]
+from torch.utils.data import DataLoader, TensorDataset # pyright: ignore[reportMissingImports]
+from alpaca.data import StockHistoricalDataClient, TimeFrame, TimeFrameUnit # pyright: ignore[reportMissingImports]
+from alpaca.data.requests import StockBarsRequest # pyright: ignore[reportMissingImports]
+from alpaca.trading.client import TradingClient # pyright: ignore[reportMissingImports]
+from alpaca.trading.requests import MarketOrderRequest # pyright: ignore[reportMissingImports]
+from alpaca.trading.enums import OrderSide, TimeInForce # pyright: ignore[reportMissingImports]
+from transformers import pipeline # pyright: ignore[reportMissingImports]
+from sklearn.preprocessing import StandardScaler # pyright: ignore[reportMissingModuleSource]
 import smtplib
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta, timezone
-import talib
+import talib # pyright: ignore[reportMissingImports]
 import pickle
 from typing import List, Tuple, Dict, Optional
 import warnings
 import time
-from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
-from tqdm import tqdm
-from colorama import Fore, Style
-import colorama
+from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type # pyright: ignore[reportMissingImports]
+from tqdm import tqdm # pyright: ignore[reportMissingModuleSource]
+from colorama import Fore, Style # pyright: ignore[reportMissingModuleSource]
+import colorama # pyright: ignore[reportMissingModuleSource]
 import multiprocessing as mp
 
 # Suppress PyTorch warnings
