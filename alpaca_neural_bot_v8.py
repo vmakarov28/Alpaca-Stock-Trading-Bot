@@ -332,7 +332,9 @@ def load_news_sentiment(symbol: str) -> Tuple[float, bool]:
     """Compute real-time news sentiment using a pre-trained model or random for testing."""
     cache_file = os.path.join(CONFIG['CACHE_DIR'], f"{symbol}_news_sentiment.pkl")
     # Force new sentiment calculation by ignoring cache
-    sentiment_score = np.random.uniform(-1.0, 1.0)  # Random sentiment for testing
+    #sentiment_score = np.random.uniform(-1.0, 1.0)  # Random sentiment for testing
+    sentiment_score = 0 #Temporary while real sentiment is not in place 
+    sentiment = 0 #Temporary while real sentiment is not in place 
     with open(cache_file, 'wb') as f:
         pickle.dump(sentiment_score, f)
     return sentiment_score, False
