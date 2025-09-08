@@ -5,7 +5,6 @@ Alpaca Neural Bot v6.7 is an advanced AI-powered stock trading bot that leverage
 ## Key capabilities
 
 Neural Network Prediction: Uses a Conv1D + LSTM model to generate buy/sell signals based on historical and real-time data.
-Sentiment Analysis: Integrates DistilBERT for news sentiment scoring.
 Backtesting: Simulates trades with transaction costs, ATR-based stops, and performance metrics (Sharpe ratio, max drawdown).
 Live Trading: Executes market orders during open hours, with email notifications for trades and summaries.
 Multi-Symbol Support: Trades multiple stocks (e.g., SPY, MSFT, AAPL) in parallel using multiprocessing.
@@ -25,6 +24,7 @@ Backtest Mode: Computes total return, Sharpe ratio, max drawdown, win rate per s
 Live Mode: Runs every 15 minutes during market hours, with countdown timer.
 Force Train: Option to retrain models instead of using cache.
 Error Handling: Retries API calls, validates data, logs trades.
+***Scroll bellow installation steps to see explanation of how it works***
 
 ## Prerequisites
 
