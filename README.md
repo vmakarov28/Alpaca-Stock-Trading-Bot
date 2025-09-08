@@ -24,6 +24,7 @@ Backtest Mode: Computes total return, Sharpe ratio, max drawdown, win rate per s
 Live Mode: Runs every 15 minutes during market hours, with countdown timer.
 Force Train: Option to retrain models instead of using cache.
 Error Handling: Retries API calls, validates data, logs trades.
+
 ***Scroll bellow installation steps to see explanation of how it works***
 
 ## Prerequisites
