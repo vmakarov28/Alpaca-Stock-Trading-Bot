@@ -115,20 +115,20 @@ CONFIG = {
     'CONFIDENCE_THRESHOLD': 0.55,  # Threshold for prediction confidence (raised to use model more selectively)
     'PREDICTION_THRESHOLD_BUY': 0.55,  # Threshold for buy signal (lowered to allow more opportunities while above 0.5)
     'PREDICTION_THRESHOLD_SELL': 0.45,  # Threshold for sell signal (increased for more balanced exits)
-    'RSI_BUY_THRESHOLD': 40,  # RSI threshold for buying (lowered for stronger oversold signals)
-    'RSI_SELL_THRESHOLD': 60,  # RSI threshold for selling (raised for stronger overbought signals)
-    'ADX_TREND_THRESHOLD': 20,  # Threshold for ADX trend strength (lowered to capture more trends)
+    'RSI_BUY_THRESHOLD': 55,  # RSI threshold for buying (lowered for stronger oversold signals)
+    'RSI_SELL_THRESHOLD': 40,  # RSI threshold for selling (raised for stronger overbought signals)
+    'ADX_TREND_THRESHOLD': 25,  # Threshold for ADX trend strength (lowered to capture more trends)
     'MAX_VOLATILITY': 3.0,  # Maximum allowed volatility (increased to include more market conditions)
 
     # Risk Management - Parameters to control trading risk
     'MAX_DRAWDOWN_LIMIT': 0.04,  # Maximum allowed drawdown
     'RISK_PERCENTAGE': 0.02,  # Percentage of cash to risk per trade (halved for smaller positions)
     'STOP_LOSS_ATR_MULTIPLIER': 1.5,  # Multiplier for ATR-based stop loss (widened to reduce whipsaws)
-    'TAKE_PROFIT_ATR_MULTIPLIER': 2.0,  # Multiplier for ATR-based take profit (tightened for quicker exits)
+    'TAKE_PROFIT_ATR_MULTIPLIER': 3.0,  # Multiplier for ATR-based take profit (tightened for quicker exits)
     'TRAILING_STOP_PERCENTAGE': 0.02,  # Percentage for trailing stop (widened slightly)
 
     # Trading Parameters - Settings related to trading operations
-    'TRANSACTION_COST_PER_TRADE': 1.0,  # Cost per trade (doubled to simulate commissions + slippage)
+    'TRANSACTION_COST_PER_TRADE': 0.01,  # Cost per trade
 
     # Sentiment Analysis - Settings for sentiment analysis
     'SENTIMENT_MODEL': 'distilbert-base-uncased-finetuned-sst-2-english',  # Model for sentiment analysis
@@ -318,7 +318,7 @@ def calculate_indicators(df: pd.DataFrame, sentiment: float) -> pd.DataFrame:
     df['Sentiment'] = sentiment
     df['Trend'] = np.where(df['close'] > df['MA20'], 1, 0)
     # New future direction target: 1 if next close > current close (binary up/down prediction)
-    df['Future_Direction'] = np.where(df['close'].shift(-3) > df['close'], 1, 0)
+    df['Future_Direction'] = np.where(df['close'].shift(-5) > df['close'], 1, 0)
     
     indicator_cols = [
         'MA20', 'MA50', 'RSI', 'MACD', 'MACD_signal', 'OBV', 'VWAP', 'ATR',
