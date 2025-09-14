@@ -96,6 +96,7 @@ CONFIG = {
     'LEARNING_RATE': 0.005,  # Initial learning rate for Adam
     'LR_SCHEDULER_PATIENCE': 5,  # Patience for ReduceLROnPlateau
     'LR_REDUCTION_FACTOR': 0.5,  # Factor to multiply LR by
+    'LOOK_AHEAD_BARS': 7,  # Number of bars to look ahead for future direction target
 
     # API and Authentication - Credentials for API access
     'ALPACA_API_KEY': 'PK442T0XBG553SK7IZ5B',  # API key for Alpaca
@@ -139,7 +140,7 @@ CONFIG = {
 }
 
 #pyenv activate pytorch_env
-#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v8.7.py --backtest --force-train
+#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v8.9.py --backtest --force-train
 
 # Configure logging
 root_logger = logging.getLogger()
@@ -176,7 +177,7 @@ def validate_config(config: Dict) -> None:
         raise ValueError("SYMBOLS list cannot be empty")
     if not isinstance(config['TIMEFRAME'], TimeFrame):
         raise ValueError("TIMEFRAME must be a valid TimeFrame object")
-    for param in ['SIMULATION_DAYS', 'TRAIN_EPOCHS', 'BATCH_SIZE', 'TIMESTEPS', 'MIN_DATA_POINTS']:
+    for param in ['SIMULATION_DAYS', 'TRAIN_EPOCHS', 'BATCH_SIZE', 'TIMESTEPS', 'MIN_DATA_POINTS', 'LOOK_AHEAD_BARS']:
         if not isinstance(config[param], int) or config[param] <= 0:
             raise ValueError(f"{param} must be a positive integer")
     for param in ['INITIAL_CASH', 'STOP_LOSS_ATR_MULTIPLIER', 'TAKE_PROFIT_ATR_MULTIPLIER', 'MAX_DRAWDOWN_LIMIT', 'RISK_PERCENTAGE']:
@@ -318,7 +319,7 @@ def calculate_indicators(df: pd.DataFrame, sentiment: float) -> pd.DataFrame:
     df['Sentiment'] = sentiment
     df['Trend'] = np.where(df['close'] > df['MA20'], 1, 0)
     # New future direction target: 1 if next close > current close (binary up/down prediction)
-    df['Future_Direction'] = np.where(df['close'].shift(-5) > df['close'], 1, 0)
+    df['Future_Direction'] = np.where(df['close'].shift(-CONFIG['LOOK_AHEAD_BARS']) > df['close'], 1, 0)
     
     indicator_cols = [
         'MA20', 'MA50', 'RSI', 'MACD', 'MACD_signal', 'OBV', 'VWAP', 'ATR',
