@@ -307,6 +307,8 @@ Ensure all dependency files are installed:
 If issues persist, check trades.log for details or open an issue on the GitHub repo.
 
 
+## How it works
+
 License
 GNU Lesser General Public License v2.1. See LICENSE for details.
 
