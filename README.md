@@ -29,6 +29,8 @@ Error Handling: Retries API calls, validates data, logs trades.
 
 # How it works
 
+# Installation Steps
+Follow these steps in order to set up the environment. All commands after steo 2 are for WSL/Ubuntu terminal.
 
 ## Prerequisites
 
@@ -40,9 +42,6 @@ Error Handling: Retries API calls, validates data, logs trades.
 - Internet: Stable connection for API calls (no VPN recommended to avoid rate limits).
 
 
-# Installation Steps
-
-Follow these steps in order to set up the environment. All commands are for WSL/Ubuntu terminal.
 
 ### Step 1: Set Up WSL (Windows Users Only)
 
