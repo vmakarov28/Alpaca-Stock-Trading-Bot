@@ -26,6 +26,10 @@ Live Mode: Runs every 15 minutes during market hours, with countdown timer.
 Force Train: Option to retrain models instead of using cache.
 Error Handling: Retries API calls, validates data, logs trades.
 
+
+# How it works
+
+
 ## Prerequisites
 
 - Drivers: Install the latest nvidia drivers from nvdia app along with Cuda 12.8 and cuDNN.
@@ -306,8 +310,6 @@ Ensure all dependency files are installed:
 
 If issues persist, check trades.log for details or open an issue on the GitHub repo.
 
-
-## How it works
 
 License
 GNU Lesser General Public License v2.1. See LICENSE for details.
