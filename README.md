@@ -27,15 +27,6 @@ Force Train: Option to retrain models instead of using cache.
 Error Handling: Retries API calls, validates data, logs trades.
 
 
-# How it works
-## Train Data Fetch
-## Train Data process
-## Train Data orginization
-## Data training
-## Backtesting
-## Live data fetch
-## Live Trading
-
 # Installation Steps
 Follow these steps in order to set up the environment. All commands after steo 2 are for WSL/Ubuntu terminal.
 
