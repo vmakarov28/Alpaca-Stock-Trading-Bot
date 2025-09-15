@@ -42,9 +42,9 @@ This traces the execution flow starting from program start (argparse in name == 
 5. create_cache_directory (makes cache dir).
 6. load_model_and_scaler (called multiple times: once per symbol in any() to check need_training).
 7. train_symbol (called once per symbol in loop):
-  1. Within train_symbol:
-  2. load_or_fetch_data (loads/fetches data).
-  3. fetch_data (if no cache: fetches bars).
+    - Within train_symbol:
+    - load_or_fetch_data (loads/fetches data).
+    - fetch_data (if no cache: fetches bars).
 8. load_news_sentiment (loads/computes sentiment).
 9. load_model_and_scaler (loads if exists).
 10. calculate_indicators (adds indicators to DF).
