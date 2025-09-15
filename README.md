@@ -42,38 +42,22 @@ This traces the execution flow starting from program start (argparse in name == 
 5. create_cache_directory (makes cache dir).
 6. load_model_and_scaler (called multiple times: once per symbol in any() to check need_training).
 7. train_symbol (called once per symbol in loop):
-  - Within train_symbol:
-  - load_or_fetch_data (loads/fetches data).
-  - fetch_data (if no cache: fetches bars).
-
-
-load_news_sentiment (loads/computes sentiment).
-load_model_and_scaler (loads if exists).
-calculate_indicators (adds indicators to DF).
-preprocess_data (if training needed: creates sequences with noise).
-train_model (if training needed: trains model).
-
-TradingModel (instantiated in train_model).
-
-
-save_model_and_scaler (if trained: saves artifacts).
-
-
-
-
-backtest (called once per symbol in backtest branch).
-
-Within backtest:
-
-preprocess_data (inference mode: creates sequences).
-TradingModel (used via loaded model for forward pass).
-
-
-
-
-calculate_performance_metrics (called once per symbol after backtest).
-format_email_body (called once after all symbols).
-send_email (called once with backtest results).
+  1. Within train_symbol:
+  2. load_or_fetch_data (loads/fetches data).
+  3. fetch_data (if no cache: fetches bars).
+8. load_news_sentiment (loads/computes sentiment).
+9. load_model_and_scaler (loads if exists).
+10. calculate_indicators (adds indicators to DF).
+11. preprocess_data (if training needed: creates sequences with noise).
+12. train_model (if training needed: trains model).
+13. TradingModel (instantiated in train_model).
+14. save_model_and_scaler (if trained: saves artifacts).
+15. backtest (called once per symbol in backtest branch).
+  1. preprocess_data (inference mode: creates sequences).
+  2. TradingModel (used via loaded model for forward pass).
+16. calculate_performance_metrics (called once per symbol after backtest).
+17. format_email_body (called once after all symbols).
+18. send_email (called once with backtest results).
 
 Execution ends after logging final value.
 
