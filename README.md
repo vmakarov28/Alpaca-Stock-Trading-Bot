@@ -31,8 +31,8 @@ Error Handling: Retries API calls, validates data, logs trades.
 
 
 
-
-## Chronological Order of Usage in Backtest Mode (--backtest True)
+# How it Works
+## Chronological Order of Usage in Backtest Mode
 This traces the execution flow starting from program start (argparse in name == "main"), assuming force_train=False (models may load from cache) and general conditions (e.g., some training needed, valid data). Calls are listed in the order they are first invoked during execution; repeated calls (e.g., per-symbol) are noted with multiplicity. Unused definitions are not listed here.
 
 main (entry point: parses args, calls main with backtest_only=True).
@@ -41,13 +41,10 @@ check_dependencies (verifies imports).
 validate_config (checks CONFIG values).
 create_cache_directory (makes cache dir).
 load_model_and_scaler (called multiple times: once per symbol in any() to check need_training).
-train_symbol (called once per symbol in loop).
-
-Within train_symbol:
-
-load_or_fetch_data (loads/fetches data).
-
-fetch_data (if no cache: fetches bars).
+train_symbol (called once per symbol in loop):
+ - Within train_symbol:
+ - load_or_fetch_data (loads/fetches data).
+ - fetch_data (if no cache: fetches bars).
 
 
 load_news_sentiment (loads/computes sentiment).
