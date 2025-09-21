@@ -38,11 +38,14 @@ This traces the execution flow starting from program start (argparse in name == 
 1. main (entry point: parses args, calls main with backtest_only=True).
        Serves as the entry point, parsing command-line arguments and orchestrating the bot's execution in backtest or live mode by calling setup functions, training or loading models per symbol, and running backtests or live trading loops.
 3. get_api_keys (validates/prompts for keys).
-4. check_dependencies (verifies imports).
-5. validate_config (checks CONFIG values).
-6. create_cache_directory (makes cache dir).
-7. load_model_and_scaler (called multiple times: once per symbol in any() to check need_training).
-8. train_symbol (called once per symbol in loop):
+          Validates Alpaca API keys in CONFIG and prompts the user for input if they are missing or invalid, ensuring secure API access.
+5. check_dependencies (verifies imports).
+          Verifies the presence of required Python modules by attempting imports, raising an ImportError if any are missing to prevent runtime failures.
+7. validate_config (checks CONFIG values).
+          Checks CONFIG parameters for correctness, such as non-empty symbols and positive integers for epochs, raising ValueErrors for invalid settings to ensure proper configuration.
+9. create_cache_directory (makes cache dir).
+10. load_model_and_scaler (called multiple times: once per symbol in any() to check need_training).
+11. train_symbol (called once per symbol in loop):
     - load_or_fetch_data (loads/fetches data).
     - fetch_data (if no cache: fetches bars).
     - load_news_sentiment (loads/computes sentiment).
@@ -52,12 +55,12 @@ This traces the execution flow starting from program start (argparse in name == 
     - train_model (if training needed: trains model).
     - TradingModel (instantiated in train_model).
     - save_model_and_scaler (if trained: saves artifacts).
-9. backtest (called once per symbol in backtest branch).
+12. backtest (called once per symbol in backtest branch).
     - preprocess_data (inference mode: creates sequences).
     - TradingModel (used via loaded model for forward pass).
-10. calculate_performance_metrics (called once per symbol after backtest).
-11. format_email_body (called once after all symbols).
-12. send_email (called once with backtest results).
+13. calculate_performance_metrics (called once per symbol after backtest).
+14. format_email_body (called once after all symbols).
+15. send_email (called once with backtest results).
 
 Execution ends after logging final value.
 
