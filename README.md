@@ -50,11 +50,12 @@ This traces the execution flow starting from program start (argparse in name == 
 **5. create_cache_directory**
        - Creates the cache directory specified in CONFIG if it doesn't exist, using os.makedirs with exist_ok=True for data storage.
 
-**10. load_model_and_scaler**
+**6. load_model_and_scaler**
        - Loads a trained model, scaler, and sentiment from cache files for a symbol if available and not forcing retrain; otherwise, returns None to trigger training, handling legacy model compatibility by reloading state into the current class.
 
        
-**11. train_symbol** (called once per symbol in loop):
+**7. train_symbol**
+       - Processes a single symbol by loading or fetching data and sentiment, calculating indicators, preprocessing sequences, training or loading the model, and saving artifacts if trained, returning processed items for multiprocessing-like sequential handling.
     - load_or_fetch_data (loads/fetches data).
     - fetch_data (if no cache: fetches bars).
     - load_news_sentiment (loads/computes sentiment).
@@ -64,6 +65,8 @@ This traces the execution flow starting from program start (argparse in name == 
     - train_model (if training needed: trains model).
     - TradingModel (instantiated in train_model).
     - save_model_and_scaler (if trained: saves artifacts).
+
+
 12. backtest (called once per symbol in backtest branch).
     - preprocess_data (inference mode: creates sequences).
     - TradingModel (used via loaded model for forward pass).
