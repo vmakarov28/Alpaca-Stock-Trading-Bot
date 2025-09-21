@@ -36,16 +36,26 @@ Error Handling: Retries API calls, validates data, logs trades.
 This traces the execution flow starting from program start (argparse in name == "main"), assuming force_train=False (models may load from cache) and general conditions (e.g., some training needed, valid data). Calls are listed in the order they are first invoked during execution; repeated calls (e.g., per-symbol) are noted with multiplicity. Unused definitions are not listed here.
 
 **1. main**
+       
        Serves as the entry point, parsing command-line arguments and orchestrating the bot's execution in backtest or live mode by calling setup functions, training or loading models per symbol, and running backtests or live trading loops.
-**3. get_api_keys**
+**2. get_api_keys**
+          
           Validates Alpaca API keys in CONFIG and prompts the user for input if they are missing or invalid, ensuring secure API access.
-**5. check_dependencies**
+**3. check_dependencies**
+          
           Verifies the presence of required Python modules by attempting imports, raising an ImportError if any are missing to prevent runtime failures.
-**7. validate_config** (checks CONFIG values).
+**4. validate_config** (checks CONFIG values).
+          
           Checks CONFIG parameters for correctness, such as non-empty symbols and positive integers for epochs, raising ValueErrors for invalid settings to ensure proper configuration.
-9. create_cache_directory (makes cache dir).
-10. load_model_and_scaler (called multiple times: once per symbol in any() to check need_training).
-11. train_symbol (called once per symbol in loop):
+**5. create_cache_directory** (makes cache dir).
+
+       Creates the cache directory specified in CONFIG if it doesn't exist, using os.makedirs with exist_ok=True for data storage.
+**10. load_model_and_scaler**
+
+       Loads a trained model, scaler, and sentiment from cache files for a symbol if available and not forcing retrain; otherwise, returns None to trigger training, handling legacy model compatibility by reloading state into the current class.
+
+       
+**11. train_symbol** (called once per symbol in loop):
     - load_or_fetch_data (loads/fetches data).
     - fetch_data (if no cache: fetches bars).
     - load_news_sentiment (loads/computes sentiment).
