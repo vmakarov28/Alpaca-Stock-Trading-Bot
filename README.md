@@ -57,31 +57,39 @@ This traces the execution flow starting from program start (argparse in name == 
 **7. train_symbol**
        - Processes a single symbol by loading or fetching data and sentiment, calculating indicators, preprocessing sequences, training or loading the model, and saving artifacts if trained, returning processed items for multiprocessing-like sequential handling.
 
-- load_or_fetch_data (loads/fetches data).
+- load_or_fetch_data (Loads historical stock data from cache if recent, otherwise fetches it via API and caches it, ensuring minimum data points for the symbol)
 
-- fetch_data (if no cache: fetches bars).
+- fetch_data (Retrieves historical bars from Alpaca API in yearly increments, handling symbol changes like META to FB, concatenating results, and validating sufficient data)
 
-- load_news_sentiment (loads/computes sentiment).
+- load_news_sentiment (Loads cached sentiment score for a symbol if valid, otherwise generates a random value for testing and caches it)
 
-- load_model_and_scaler (loads if exists).
+- calculate_indicators (Adds technical indicators like RSI, MACD, ATR, and sentiment to the DataFrame using TA-Lib, computes future direction targets, and drops incomplete rows)
 
-- calculate_indicators (adds indicators to DF).
+- preprocess_data (Scales features using RobustScaler (fitting in training mode), creates sliding window sequences for LSTM input, adds noise during training, and aligns binary future direction targets)
 
-- preprocess_data (if training needed: creates sequences with noise).
+- train_model (Builds and trains an LSTM model on sequences using BCE loss, Adam optimizer, early stopping on validation loss, and saves the best model and scaler)
 
-- train_model (if training needed: trains model).
+- TradingModel (Defines an LSTM-based neural network with dropout and ReLU layers for predicting stock direction from time-series features, processing sequences to output logits)
 
-- TradingModel (instantiated in train_model).
-
-- save_model_and_scaler (if trained: saves artifacts).
+- save_model_and_scaler (Saves the model's state dict, scaler, and sentiment to cache files using torch.save and pickle for future loading)
 
 
-12. backtest (called once per symbol in backtest branch).
-    - preprocess_data (inference mode: creates sequences).
-    - TradingModel (used via loaded model for forward pass).
-13. calculate_performance_metrics (called once per symbol after backtest).
-14. format_email_body (called once after all symbols).
-15. send_email (called once with backtest results).
+**12. backtest**
+       - Simulates trading for a symbol using model predictions on historical data, applying buy/sell rules with filters like RSI/ADX/volatility, risk management via ATR stops, and tracking returns, trades, and win rate.
+
+- preprocess_data (Scales recent data without fitting, creates sequences for prediction without targets or noise)
+
+- TradingModel (Performs forward passes on batched sequences to generate sigmoid probabilities for trading signals)
+
+**13. calculate_performance_metrics**
+       - Computes total return, Sharpe ratio, and max drawdown from trade returns, using numpy for means, std, and cumulative products.
+
+**14. format_email_body**
+       - Constructs a string with backtest summary including initial/final values, total return, and per-symbol metrics, trades, and win rates for email content.
+
+**15. send_email**
+       - Sends an email with the given subject and body using SMTP, logging in with CONFIG credentials and MIMEText for formatting.
+
 
 Execution ends after logging final value.
 
