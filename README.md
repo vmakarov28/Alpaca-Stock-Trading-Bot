@@ -56,15 +56,24 @@ This traces the execution flow starting from program start (argparse in name == 
        
 **7. train_symbol**
        - Processes a single symbol by loading or fetching data and sentiment, calculating indicators, preprocessing sequences, training or loading the model, and saving artifacts if trained, returning processed items for multiprocessing-like sequential handling.
-    - load_or_fetch_data (loads/fetches data).
-    - fetch_data (if no cache: fetches bars).
-    - load_news_sentiment (loads/computes sentiment).
-    - load_model_and_scaler (loads if exists).
-    - calculate_indicators (adds indicators to DF).
-    - preprocess_data (if training needed: creates sequences with noise).
-    - train_model (if training needed: trains model).
-    - TradingModel (instantiated in train_model).
-    - save_model_and_scaler (if trained: saves artifacts).
+
+- load_or_fetch_data (loads/fetches data).
+
+- fetch_data (if no cache: fetches bars).
+
+- load_news_sentiment (loads/computes sentiment).
+
+- load_model_and_scaler (loads if exists).
+
+- calculate_indicators (adds indicators to DF).
+
+- preprocess_data (if training needed: creates sequences with noise).
+
+- train_model (if training needed: trains model).
+
+- TradingModel (instantiated in train_model).
+
+- save_model_and_scaler (if trained: saves artifacts).
 
 
 12. backtest (called once per symbol in backtest branch).
