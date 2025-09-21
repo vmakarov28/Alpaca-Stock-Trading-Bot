@@ -36,12 +36,13 @@ Error Handling: Retries API calls, validates data, logs trades.
 This traces the execution flow starting from program start (argparse in name == "main"), assuming force_train=False (models may load from cache) and general conditions (e.g., some training needed, valid data). Calls are listed in the order they are first invoked during execution; repeated calls (e.g., per-symbol) are noted with multiplicity. Unused definitions are not listed here.
 
 1. main (entry point: parses args, calls main with backtest_only=True).
-2. get_api_keys (validates/prompts for keys).
-3. check_dependencies (verifies imports).
-4. validate_config (checks CONFIG values).
-5. create_cache_directory (makes cache dir).
-6. load_model_and_scaler (called multiple times: once per symbol in any() to check need_training).
-7. train_symbol (called once per symbol in loop):
+       Serves as the entry point, parsing command-line arguments and orchestrating the bot's execution in backtest or live mode by calling setup functions, training or loading models per symbol, and running backtests or live trading loops.
+3. get_api_keys (validates/prompts for keys).
+4. check_dependencies (verifies imports).
+5. validate_config (checks CONFIG values).
+6. create_cache_directory (makes cache dir).
+7. load_model_and_scaler (called multiple times: once per symbol in any() to check need_training).
+8. train_symbol (called once per symbol in loop):
     - load_or_fetch_data (loads/fetches data).
     - fetch_data (if no cache: fetches bars).
     - load_news_sentiment (loads/computes sentiment).
@@ -51,12 +52,12 @@ This traces the execution flow starting from program start (argparse in name == 
     - train_model (if training needed: trains model).
     - TradingModel (instantiated in train_model).
     - save_model_and_scaler (if trained: saves artifacts).
-8. backtest (called once per symbol in backtest branch).
+9. backtest (called once per symbol in backtest branch).
     - preprocess_data (inference mode: creates sequences).
     - TradingModel (used via loaded model for forward pass).
-9. calculate_performance_metrics (called once per symbol after backtest).
-10. format_email_body (called once after all symbols).
-11. send_email (called once with backtest results).
+10. calculate_performance_metrics (called once per symbol after backtest).
+11. format_email_body (called once after all symbols).
+12. send_email (called once with backtest results).
 
 Execution ends after logging final value.
 
