@@ -35,13 +35,13 @@ Error Handling: Retries API calls, validates data, logs trades.
 ## Chronological Order of Usage in Backtest Mode
 This traces the execution flow starting from program start (argparse in name == "main"), assuming force_train=False (models may load from cache) and general conditions (e.g., some training needed, valid data). Calls are listed in the order they are first invoked during execution; repeated calls (e.g., per-symbol) are noted with multiplicity. Unused definitions are not listed here.
 
-1. main (entry point: parses args, calls main with backtest_only=True).
+**1. main**
        Serves as the entry point, parsing command-line arguments and orchestrating the bot's execution in backtest or live mode by calling setup functions, training or loading models per symbol, and running backtests or live trading loops.
-3. get_api_keys (validates/prompts for keys).
+**3. get_api_keys**
           Validates Alpaca API keys in CONFIG and prompts the user for input if they are missing or invalid, ensuring secure API access.
-5. check_dependencies (verifies imports).
+**5. check_dependencies**
           Verifies the presence of required Python modules by attempting imports, raising an ImportError if any are missing to prevent runtime failures.
-7. validate_config (checks CONFIG values).
+**7. validate_config** (checks CONFIG values).
           Checks CONFIG parameters for correctness, such as non-empty symbols and positive integers for epochs, raising ValueErrors for invalid settings to ensure proper configuration.
 9. create_cache_directory (makes cache dir).
 10. load_model_and_scaler (called multiple times: once per symbol in any() to check need_training).
