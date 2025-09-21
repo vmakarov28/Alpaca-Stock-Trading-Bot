@@ -37,21 +37,21 @@ This traces the execution flow starting from program start (argparse in name == 
 
 **1. main**
        - Serves as the entry point, parsing command-line arguments and orchestrating the bot's execution in backtest or live mode by calling setup functions, training or loading models per symbol, and running backtests or live trading loops.
+
 **2. get_api_keys**
-          
-          Validates Alpaca API keys in CONFIG and prompts the user for input if they are missing or invalid, ensuring secure API access.
+       - Validates Alpaca API keys in CONFIG and prompts the user for input if they are missing or invalid, ensuring secure API access.
+
 **3. check_dependencies**
-          
-          Verifies the presence of required Python modules by attempting imports, raising an ImportError if any are missing to prevent runtime failures.
-**4. validate_config** (checks CONFIG values).
-          
-          Checks CONFIG parameters for correctness, such as non-empty symbols and positive integers for epochs, raising ValueErrors for invalid settings to ensure proper configuration.
-**5. create_cache_directory** (makes cache dir).
+       - Verifies the presence of required Python modules by attempting imports, raising an ImportError if any are missing to prevent runtime failures.
 
-       Creates the cache directory specified in CONFIG if it doesn't exist, using os.makedirs with exist_ok=True for data storage.
+**4. validate_config**
+       - Checks CONFIG parameters for correctness, such as non-empty symbols and positive integers for epochs, raising ValueErrors for invalid settings to ensure proper configuration.
+
+**5. create_cache_directory**
+       - Creates the cache directory specified in CONFIG if it doesn't exist, using os.makedirs with exist_ok=True for data storage.
+
 **10. load_model_and_scaler**
-
-       Loads a trained model, scaler, and sentiment from cache files for a symbol if available and not forcing retrain; otherwise, returns None to trigger training, handling legacy model compatibility by reloading state into the current class.
+       - Loads a trained model, scaler, and sentiment from cache files for a symbol if available and not forcing retrain; otherwise, returns None to trigger training, handling legacy model compatibility by reloading state into the current class.
 
        
 **11. train_symbol** (called once per symbol in loop):
