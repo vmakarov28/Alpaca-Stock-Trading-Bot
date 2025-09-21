@@ -36,8 +36,7 @@ Error Handling: Retries API calls, validates data, logs trades.
 This traces the execution flow starting from program start (argparse in name == "main"), assuming force_train=False (models may load from cache) and general conditions (e.g., some training needed, valid data). Calls are listed in the order they are first invoked during execution; repeated calls (e.g., per-symbol) are noted with multiplicity. Unused definitions are not listed here.
 
 **1. main**
-       
-       Serves as the entry point, parsing command-line arguments and orchestrating the bot's execution in backtest or live mode by calling setup functions, training or loading models per symbol, and running backtests or live trading loops.
+       - Serves as the entry point, parsing command-line arguments and orchestrating the bot's execution in backtest or live mode by calling setup functions, training or loading models per symbol, and running backtests or live trading loops.
 **2. get_api_keys**
           
           Validates Alpaca API keys in CONFIG and prompts the user for input if they are missing or invalid, ensuring secure API access.
