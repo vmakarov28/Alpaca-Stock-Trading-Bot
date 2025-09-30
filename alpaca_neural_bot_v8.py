@@ -1,34 +1,11 @@
 
 # +------------------------------------------------------------------------------+
-# |                            Alpaca Neural Bot v8.9                            |
+# |                            Alpaca Neural Bot v9.0.5                          |
 # +------------------------------------------------------------------------------+
 # | Author: Vladimir Makarov                                                     |
 # | Project Start Date: May 9, 2025                                              |
 # | License: GNU Lesser General Public License v2.1                              |
-# | Version: 4 (Un-Released)                                                     |
-# |                                                                              |
-# | Dependencies:                                                                |
-# | - torch (Neural network framework)                                           |
-# | - numpy (Numerical computations)                                             |
-# | - pandas (Data manipulation)                                                 |
-# | - alpaca-py (Alpaca integration, imports as 'alpaca')                        |
-# | - transformers (Sentiment analysis)                                          |
-# | - scikit-learn (Machine learning utilities)                                  |
-# | - ta-lib (Technical analysis)                                                |
-# | - tenacity (Retry logic)                                                     |
-# | - smtplib (Email notifications)                                              |
-# | - argparse (Command-line parsing)                                            |
-# | - tqdm (Progress bars)                                                       |
-# | - colorama (Console formatting)                                              |
-# | Install using: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128 |
-# |                pip install alpaca-py transformers pandas numpy scikit-learn ta-lib tenacity tqdm colorama |
-# |                pip install protobuf==5.28.3                                  |
-# |                                                                              |
-# | Double check before starting:                                                |
-# | - Ensure Alpaca API keys are configured in CONFIG.                           |
-# | - Requires stable internet for live trading and data fetching.               |
-# | - GitHub: https://github.com/vmakarov28/Alpaca-Stock-Trading-Bot/tree/main   |
-# |                                                                              |
+# | Version: 9.0.5 (Un-Released)                                                 |
 # +------------------------------------------------------------------------------+
 
 import os
@@ -54,7 +31,7 @@ from email.mime.text import MIMEText
 from datetime import datetime, timedelta, timezone
 import talib
 import pickle
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional, Any
 import warnings
 import time
 from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
@@ -75,11 +52,14 @@ CONFIG = {
     'TIMEFRAME': TimeFrame(15, TimeFrameUnit.Minute),  # Time interval for data fetching
     'INITIAL_CASH': 100000.00,  # Starting cash for trading simulation
     'MIN_HOLDING_PERIOD_MINUTES': 45,  # Minimum holding period for trades
-    'TRANSACTION_COST_PER_TRADE': 0.25,  # Cost per trade
 
     # Data Fetching and Caching - Parameters for data retrieval and storage
     'TRAIN_DATA_START_DATE': '2015-01-01',  # Start date for training data
-    'BACKTEST_START_DATE': '2020-01-01',  # Start date for backtesting (historical data availability)
+    'TRAIN_END_DATE': '2022-12-31',  # End date for training data (to prevent leakage)
+    'VAL_START_DATE': '2023-01-01',  # Start date for validation data
+    'VAL_END_DATE': '2024-12-31',  # End date for validation data
+    'BACKTEST_START_DATE': '2025-01-01',  # Start date for backtesting (out-of-sample)
+
     'SIMULATION_DAYS': 180,  # Number of days for simulation
     'MIN_DATA_POINTS': 100,  # Minimum data points required for processing
     'CACHE_DIR': './cache',  # Directory for caching data
@@ -91,12 +71,13 @@ CONFIG = {
     'BATCH_SIZE': 32,  # Batch size for training
     'TIMESTEPS': 30,  # Number of time steps for sequence data
     'EARLY_STOPPING_MONITOR': 'val_loss',  # Metric to monitor for early stopping
-    'EARLY_STOPPING_PATIENCE': 15,  # Patience for early stopping
-    'EARLY_STOPPING_MIN_DELTA': 0.0005,  # Minimum delta for early stopping
-    'LEARNING_RATE': 0.005,  # Initial learning rate for Adam
+    'EARLY_STOPPING_PATIENCE': 20,  # Patience for early stopping
+    'EARLY_STOPPING_MIN_DELTA': 0.0001,  # Reduced min delta to detect smaller improvements
+    'LEARNING_RATE': 0.001,  # Reduced initial learning rate for Adam to stabilize training
     'LR_SCHEDULER_PATIENCE': 5,  # Patience for ReduceLROnPlateau
     'LR_REDUCTION_FACTOR': 0.5,  # Factor to multiply LR by
     'LOOK_AHEAD_BARS': 7,  # Number of bars to look ahead for future direction target
+    'NUM_PARALLEL_WORKERS': 4,  # Number of parallel workers for symbol training (tune based on VRAM/CPU cores)
 
     # API and Authentication - Credentials for API access
     'ALPACA_API_KEY': 'PK442T0XBG553SK7IZ5B',  # API key for Alpaca
@@ -126,7 +107,7 @@ CONFIG = {
     'RISK_PERCENTAGE': 0.02,  # Percentage of cash to risk per trade (halved for smaller positions)
     'STOP_LOSS_ATR_MULTIPLIER': 1.5,  # Multiplier for ATR-based stop loss (widened to reduce whipsaws)
     'TAKE_PROFIT_ATR_MULTIPLIER': 3.0,  # Multiplier for ATR-based take profit (tightened for quicker exits)
-    'TRAILING_STOP_PERCENTAGE': 0.9,  # Percentage for trailing stop (widened slightly)
+    'TRAILING_STOP_PERCENTAGE': 0.09,  # Percentage for trailing stop (widened slightly)
 
     # Trading Parameters - Settings related to trading operations
     'TRANSACTION_COST_PER_TRADE': 0.01,  # Cost per trade
@@ -139,8 +120,100 @@ CONFIG = {
     'API_RETRY_DELAY': 1000,  # Delay between retry attempts in milliseconds
 }
 
+def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Adds technical indicators to the DataFrame using TA-Lib and pandas calculations.
+    Assumes df has columns: 'open', 'high', 'low', 'close', 'volume'.
+    Drops NaN rows after computations.
+    """
+    df['MA20'] = talib.SMA(df['close'], timeperiod=20)
+    df['MA50'] = talib.SMA(df['close'], timeperiod=50)
+    df['RSI'] = talib.RSI(df['close'], timeperiod=14)
+    macd, macd_signal, _ = talib.MACD(df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
+    df['MACD'] = macd
+    df['MACD_signal'] = macd_signal
+    df['OBV'] = talib.OBV(df['close'], df['volume'])
+    df['VWAP'] = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum()
+    df['ATR'] = talib.ATR(df['high'], df['low'], df['close'], timeperiod=14)
+    # Chaikin Money Flow approximation (20-period)
+    df['CMF'] = talib.AD(df['high'], df['low'], df['close'], df['volume']) / df['volume'].rolling(20).sum()
+    df['Close_ATR'] = df['close'] / df['ATR']
+    df['MA20_ATR'] = df['MA20'] / df['ATR']
+    df['Return_1d'] = df['close'].pct_change(1)
+    df['Return_5d'] = df['close'].pct_change(5)
+    df['Volatility'] = df['Return_1d'].rolling(20).std() * np.sqrt(252)  # Annualized
+    upper, _, lower = talib.BBANDS(df['close'], timeperiod=20, nbdevup=2, nbdevdn=2)
+    df['BB_upper'] = upper
+    df['BB_lower'] = lower
+    df['Stoch_K'], df['Stoch_D'] = talib.STOCH(df['high'], df['low'], df['close'], fastk_period=14, slowk_period=3, slowd_period=3)
+    df['ADX'] = talib.ADX(df['high'], df['low'], df['close'], timeperiod=14)
+    df = df.dropna()  # Keep datetime index for filtering
+    return df
+
+def get_sentiment_score(symbol: str) -> float:
+    """
+    Fetches or loads cached news for the symbol and computes average sentiment score using transformers.
+    For simplicity, assumes news text is fetched via a placeholder; in production, integrate with Alpaca news API or external.
+    Returns a score between -1 (negative) and 1 (positive).
+    """
+    cache_path = os.path.join(CONFIG['CACHE_DIR'], f"{symbol}_news_sentiment.pkl")
+    if os.path.exists(cache_path):
+        with open(cache_path, 'rb') as f:
+            score = pickle.load(f)
+        logger.info(f"Loaded sentiment score for {symbol} from cache: {score:.3f}")
+        return score
+    else:
+        # Placeholder for news fetching; in full code, use Alpaca news API or external (e.g., via tools)
+        # For demo, simulate with dummy news and transformers pipeline
+        sentiment_pipeline = pipeline("sentiment-analysis")
+        dummy_news = [f"Positive news for {symbol}", f"Neutral update on {symbol}", f"Negative report for {symbol}"]  # Replace with real fetch
+        scores = [analysis['score'] if analysis['label'] == 'POSITIVE' else -analysis['score'] for text in dummy_news for analysis in sentiment_pipeline(text)]
+        score = np.mean(scores)
+        with open(cache_path, 'wb') as f:
+            pickle.dump(score, f)
+        logger.info(f"Calculated sentiment score for {symbol}: {score:.3f}")
+        return score
+
+@retry(retry=retry_if_exception_type(Exception), stop=stop_after_attempt(3), wait=wait_fixed(5))
+def load_data(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    Fetches historical stock bars for a symbol from Alpaca API or cache.
+    Caches the DataFrame as pickle for reuse.
+    """
+    cache_path = os.path.join(CONFIG['CACHE_DIR'], f"{symbol}_{start_date}_{end_date}.pkl")
+    if os.path.exists(cache_path) and (time.time() - os.path.getmtime(cache_path) < CONFIG['CACHE_EXPIRY_SECONDS']):
+        with open(cache_path, 'rb') as f:
+            df = pickle.load(f)
+        logger.info(f"Loaded {len(df)} bars for {symbol} from cache")
+    else:
+        client = StockHistoricalDataClient(CONFIG['ALPACA_API_KEY'], CONFIG['ALPACA_SECRET_KEY'])
+        request_params = StockBarsRequest(
+            symbol_or_symbols=symbol,
+            timeframe=CONFIG['TIMEFRAME'],
+            start=pd.to_datetime(start_date),
+            end=pd.to_datetime(end_date)
+        )
+        bars = client.get_stock_bars(request_params)
+        df = bars.df.reset_index()
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df.set_index('timestamp', inplace=True)
+        if not os.path.exists(CONFIG['CACHE_DIR']):
+            os.makedirs(CONFIG['CACHE_DIR'])
+        with open(cache_path, 'wb') as f:
+            pickle.dump(df, f)
+        logger.info(f"Loaded {len(df)} bars for {symbol} from API")
+    if len(df) < CONFIG['MIN_DATA_POINTS']:
+        logger.warning(f"Insufficient data for {symbol}: only {len(df)} points")
+    return df
+
+
+
+def train_wrapper(args):
+    symbol, expected_features, force_train = args
+    return train_symbol(symbol, expected_features, force_train)
+
 #pyenv activate pytorch_env
-#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.0.1.py --backtest --force-train
+#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.0.5.py --backtest --force-train
 
 # Configure logging
 root_logger = logging.getLogger()
@@ -318,15 +391,13 @@ def calculate_indicators(df: pd.DataFrame, sentiment: float) -> pd.DataFrame:
     df['ADX'] = talib.ADX(df['high'], df['low'], df['close'], timeperiod=14)
     df['Sentiment'] = sentiment
     df['Trend'] = np.where(df['close'] > df['MA20'], 1, 0)
-    # New future direction target: 1 if next close > current close (binary up/down prediction)
-    df['Future_Direction'] = np.where(df['close'].shift(-CONFIG['LOOK_AHEAD_BARS']) > df['close'], 1, 0)
     
     indicator_cols = [
         'MA20', 'MA50', 'RSI', 'MACD', 'MACD_signal', 'OBV', 'VWAP', 'ATR',
         'CMF', 'Close_ATR', 'MA20_ATR', 'Return_1d', 'Return_5d', 'Volatility',
-        'BB_upper', 'BB_middle', 'BB_lower', 'Stoch_K', 'Stoch_D', 'ADX', 'Sentiment', 'Trend', 'Future_Direction'
+        'BB_upper', 'BB_middle', 'BB_lower', 'Stoch_K', 'Stoch_D', 'ADX', 'Sentiment', 'Trend'
     ]
-    df = df.dropna(subset=indicator_cols)  # Drops last row due to shift(-1) NaN
+    df = df.dropna(subset=indicator_cols)
     return df
 
 def validate_raw_data(df: pd.DataFrame, symbol: str) -> None:
@@ -352,17 +423,18 @@ def validate_indicators(df: pd.DataFrame, symbol: str) -> None:
         missing = [col for col in required_cols if col not in df.columns]
         raise ValueError(f"Missing indicator columns for {symbol}: {missing}")
 
-def preprocess_data(df: pd.DataFrame, timesteps: int, add_noise: bool = False, inference_scaler: Optional[RobustScaler] = None, inference_mode: bool = False) -> Tuple[np.ndarray, Optional[np.ndarray], Optional[RobustScaler]]:
+def preprocess_data(df: pd.DataFrame, timesteps: int, add_noise: bool = False, inference_scaler: Optional[RobustScaler] = None, inference_mode: bool = False, fit_scaler: bool = True) -> Tuple[np.ndarray, Optional[np.ndarray], Optional[RobustScaler]]:
     """Preprocess data into sequences for future price direction prediction (next bar up/down).
     
     Args:
-        inference_mode: If True, use provided inference_scaler for scaling (no fitting); return None for y_seq and scaler.
-        inference_scaler: Scaler to use in inference mode.
+        inference_mode: If True, do not compute targets (y_seq); return None for y_seq.
+        fit_scaler: If True, fit a new scaler; else, transform with inference_scaler (prevents leakage on val/test).
+        inference_scaler: Existing scaler for transform when fit_scaler=False.
     
     Returns:
         X_seq: Scaled input sequences.
         y_seq: Targets (None in inference mode).
-        scaler: Fitted scaler (None in inference mode).
+        scaler: Fitted scaler (None if fit_scaler=False).
     """
     df = df.copy()
     df.ffill(inplace=True)
@@ -378,17 +450,20 @@ def preprocess_data(df: pd.DataFrame, timesteps: int, add_noise: bool = False, i
         raise ValueError("Future_Direction column missing; required for training.")
     X_raw = df[features].values
     
-    if inference_mode:
-        if inference_scaler is None:
-            raise ValueError("inference_scaler must be provided in inference_mode.")
-        X = inference_scaler.transform(X_raw)
-        y_seq = None
-        scaler = None
-    else:
-        y = df['Future_Direction'].values
+    if fit_scaler:
         scaler = RobustScaler()
         X = scaler.fit_transform(X_raw)
+    else:
+        if inference_scaler is None:
+            raise ValueError("inference_scaler must be provided when fit_scaler=False.")
+        X = inference_scaler.transform(X_raw)
+        scaler = None
+    
+    if not inference_mode:
+        y = df['Future_Direction'].values
         y_seq = y
+    else:
+        y_seq = None
     
     if add_noise:
         X += np.random.normal(0, 0.02, X.shape)
@@ -403,7 +478,7 @@ def preprocess_data(df: pd.DataFrame, timesteps: int, add_noise: bool = False, i
     X_seq = window[:num_sequences].reshape(num_sequences, timesteps, X.shape[1])
     
     if not inference_mode:
-        y_seq = y[timesteps - 1: timesteps - 1 + num_sequences]  # Align target to end of each sequence (predict direction from sequence end to end+3)
+        y_seq = y[timesteps - 1: timesteps - 1 + num_sequences]  # Align target to end of each sequence
         logger.info(f"Preprocessed {len(X_seq)} sequences; y balance: {np.mean(y_seq):.3f} (up fraction)")
     else:
         logger.info(f"Preprocessed {len(X_seq)} inference sequences")
@@ -414,6 +489,7 @@ class TradingModel(nn.Module):
     def __init__(self, timesteps: int, features: int):
         super(TradingModel, self).__init__()
         self.lstm = nn.LSTM(input_size=features, hidden_size=64, num_layers=1, batch_first=True, dropout=0.1)
+        self.attention = nn.MultiheadAttention(embed_dim=64, num_heads=4, dropout=0.1, batch_first=True)  # Add attention
         self.dense1 = nn.Linear(64, 32)
         self.dense2 = nn.Linear(32, 1)
         self.relu = nn.ReLU()
@@ -423,7 +499,9 @@ class TradingModel(nn.Module):
 
     def forward(self, x):
         x, _ = self.lstm(x)
-        x = x[:, -1, :]
+        # Apply attention to LSTM outputs (query=key=value=x)
+        x, _ = self.attention(x, x, x)  # Self-attention on sequence
+        x = x[:, -1, :]  # Use last timestep after attention
         x = self.relu(self.dense1(x))
         x = self.dropout(x)
         x = self.dense2(x)
@@ -442,79 +520,69 @@ class TQDMCallback:
     def on_epoch_end(self):
         self.progress_bar.update(1)
 
-def train_model(symbol: str, X: np.ndarray, y: np.ndarray, epochs: int, batch_size: int, timesteps: int = CONFIG['TIMESTEPS'], features: int = 24, scaler: Optional[RobustScaler] = None) -> Tuple[nn.Module, RobustScaler]:
-    """Train the CNN-LSTM model for the symbol."""
+def train_model(symbol: str, df: pd.DataFrame, epochs: int, batch_size: int, timesteps: int, expected_features: int) -> Tuple[nn.Module, Any]:
+    """Train the CNN-LSTM model with early stopping and learning rate scheduling."""
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    logger.info(f"Training model for {symbol} on device: {device}")
-
-    # Fixed: Use defined TradingModel class instead of undefined CNNLSTM
-    model = TradingModel(CONFIG['TIMESTEPS'], features).to(device)
-    criterion = nn.BCEWithLogitsLoss()  # Define loss function
+    model = TradingModel(timesteps, expected_features).to(device)
     optimizer = optim.Adam(model.parameters(), lr=CONFIG['LEARNING_RATE'])
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=CONFIG['LR_SCHEDULER_PATIENCE'], factor=CONFIG['LR_REDUCTION_FACTOR'])
-
-    # DataLoader (assumes X is already scaled from preprocess_data)
-    dataset = TensorDataset(torch.FloatTensor(X), torch.FloatTensor(y))
-    train_size = int(0.8 * len(dataset))
-    val_size = len(dataset) - train_size
-    train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-
+    criterion = nn.BCEWithLogitsLoss()
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=CONFIG['LR_SCHEDULER_PATIENCE'], factor=CONFIG['LR_REDUCTION_FACTOR'])
     best_val_loss = float('inf')
     patience_counter = 0
-
+    # Chronological split: Assume df is sorted by timestamp
+    df_train = df[df['timestamp'] <= pd.Timestamp(CONFIG['TRAIN_END_DATE'], tz='UTC')].copy()
+    df_val = df[(df['timestamp'] > pd.Timestamp(CONFIG['TRAIN_END_DATE'], tz='UTC')) & (df['timestamp'] <= pd.Timestamp(CONFIG['VAL_END_DATE'], tz='UTC'))].copy()
+    if len(df_train) < CONFIG['MIN_DATA_POINTS'] or len(df_val) < CONFIG['MIN_DATA_POINTS'] // 5:
+        raise ValueError(f"Insufficient data for {symbol}: train={len(df_train)}, val={len(df_val)}")
+    # Compute targets separately on subsets to prevent label leakage
+    df_train['Future_Direction'] = np.where(df_train['close'].shift(-CONFIG['LOOK_AHEAD_BARS']) > df_train['close'], 1, 0)
+    df_train = df_train.dropna(subset=['Future_Direction'])
+    df_val['Future_Direction'] = np.where(df_val['close'].shift(-CONFIG['LOOK_AHEAD_BARS']) > df_val['close'], 1, 0)
+    df_val = df_val.dropna(subset=['Future_Direction'])
+    # Preprocess subsets separately to avoid label leakage
+    X_train, y_train, scaler = preprocess_data(df_train, timesteps, add_noise=True)
+    X_val, y_val, _ = preprocess_data(df_val, timesteps, inference_scaler=scaler, inference_mode=False)  # Use train scaler, but compute y for val
+    if X_train.shape[2] != expected_features or X_val.shape[2] != expected_features:
+        raise ValueError(f"Feature mismatch for {symbol}: expected {expected_features}, train got {X_train.shape[2]}, val got {X_val.shape[2]}")
+    train_dataset = TensorDataset(torch.FloatTensor(X_train), torch.FloatTensor(y_train))
+    val_dataset = TensorDataset(torch.FloatTensor(X_val), torch.FloatTensor(y_val))
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
     for epoch in range(epochs):
         model.train()
         train_loss = 0.0
-        for X_batch, y_batch in train_loader:
-            X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+        for batch_X, batch_y in train_loader:
+            batch_X, batch_y = batch_X.to(device), batch_y.to(device)
             optimizer.zero_grad()
-            outputs = model(X_batch)
-            loss = criterion(outputs, y_batch.unsqueeze(1))
+            outputs = model(batch_X)
+            loss = criterion(outputs.squeeze(1), batch_y.float())
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)  # Gradient clipping
             optimizer.step()
             train_loss += loss.item()
-
-        # Validation
+        train_loss /= len(train_loader)
         model.eval()
         val_loss = 0.0
         with torch.no_grad():
-            for X_batch, y_batch in val_loader:
-                X_batch, y_batch = X_batch.to(device), y_batch.to(device)
-                outputs = model(X_batch)
-                val_loss += criterion(outputs, y_batch.unsqueeze(1)).item()
-
-        avg_train_loss = train_loss / len(train_loader)
-        avg_val_loss = val_loss / len(val_loader)
-        scheduler.step(avg_val_loss)
-
-        logger.info(f"Epoch {epoch+1}/{epochs} - Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}")
-
-        # Early stopping
-        if avg_val_loss < best_val_loss - CONFIG['EARLY_STOPPING_MIN_DELTA']:
-            best_val_loss = avg_val_loss
+            for batch_X, batch_y in val_loader:
+                batch_X, batch_y = batch_X.to(device), batch_y.to(device)
+                outputs = model(batch_X)
+                loss = criterion(outputs.squeeze(1), batch_y.float())
+                val_loss += loss.item()
+        val_loss /= len(val_loader)
+        scheduler.step(val_loss)
+        if val_loss < best_val_loss - CONFIG['EARLY_STOPPING_MIN_DELTA']:
+            best_val_loss = val_loss
             patience_counter = 0
-            torch.save(model.state_dict(), f"{CONFIG['CACHE_DIR']}/{symbol}_best_model.pth")
+            torch.save(model.state_dict(), os.path.join(CONFIG['CACHE_DIR'], f"{symbol}_model.pth"))
         else:
             patience_counter += 1
             if patience_counter >= CONFIG['EARLY_STOPPING_PATIENCE']:
-                logger.info(f"Early stopping at epoch {epoch+1}")
+                logger.info(f"Early stopping triggered for {symbol} at epoch {epoch+1}")
                 break
-
-    # Load best model
-    model.load_state_dict(torch.load(f"{CONFIG['CACHE_DIR']}/{symbol}_best_model.pth"))
-
-    # Save final trained model and scaler for future loading
-    model_path = f"{CONFIG['CACHE_DIR']}/{symbol}_model.pth"
-    scaler_path = f"{CONFIG['CACHE_DIR']}/{symbol}_scaler.pkl"
-    torch.save({'model_state_dict': model.state_dict(), 'class_name': 'TradingModel'}, model_path)
-    with open(scaler_path, 'wb') as f:
+    model.load_state_dict(torch.load(os.path.join(CONFIG['CACHE_DIR'], f"{symbol}_model.pth")))
+    with open(os.path.join(CONFIG['CACHE_DIR'], f"{symbol}_scaler.pkl"), 'wb') as f:
         pickle.dump(scaler, f)
-    logger.info(f"Saved final model and scaler to {model_path} and {scaler_path}")
-
-    return model, scaler or RobustScaler()  # Use passed scaler if available
+    return model, scaler
 
 
 def load_model_and_scaler(symbol: str, expected_features: int, force_retrain: bool = False) -> Tuple[Optional[nn.Module], Optional[RobustScaler], Optional[float]]:
@@ -598,43 +666,25 @@ def save_model_and_scaler(symbol: str, model: nn.Module, scaler: RobustScaler, s
         raise
 
 
-def train_symbol(symbol: str, expected_features: int, force_train: bool) -> Tuple[str, pd.DataFrame, nn.Module, RobustScaler, bool, float, bool, bool]:
-    """Train or load model for a single symbol using multiprocessing."""
-    # Load data
-    df, data_loaded = load_or_fetch_data(symbol, CONFIG['TRAIN_DATA_START_DATE'], CONFIG['BACKTEST_START_DATE'])
+def train_symbol(symbol: str, expected_features: int, force_train: bool) -> Tuple[str, pd.DataFrame, nn.Module, Any, bool, float, bool, bool]:
+    """Train or load model for a symbol."""
+    df, data_loaded = load_or_fetch_data(symbol, CONFIG['TRAIN_DATA_START_DATE'], CONFIG['VAL_END_DATE'])
     sentiment, sentiment_loaded = load_news_sentiment(symbol)
-    
-    # Load model, scaler, and training sentiment if not forcing train
-    model, scaler, training_sentiment = load_model_and_scaler(symbol, expected_features, force_train)
-    model_loaded = model is not None
-    
-    # If model loaded, override with training sentiment if available (for consistency)
-    if model_loaded and training_sentiment is not None:
-        sentiment = training_sentiment
-        sentiment_loaded = True
-    
     df = calculate_indicators(df, sentiment)
-    
-    # Define features (consistent with live/backtest)
-    features = [
-        'close', 'high', 'low', 'volume', 'MA20', 'MA50', 'RSI',
-        'MACD', 'MACD_signal', 'OBV', 'VWAP', 'ATR', 'CMF', 'Close_ATR',
-        'MA20_ATR', 'Return_1d', 'Return_5d', 'Volatility', 'BB_upper',
-        'BB_lower', 'Stoch_K', 'Stoch_D', 'ADX', 'Sentiment'
-    ]
-    if len(features) != expected_features:
-        raise ValueError(f"Feature count mismatch: expected {expected_features}, got {len(features)}")
-    
-    if not model_loaded:
-        # Preprocess with scaling
-        X, y, scaler = preprocess_data(df, CONFIG['TIMESTEPS'], add_noise=True)
-        # Train
-        model, trained_scaler = train_model(symbol, X, y, CONFIG['TRAIN_EPOCHS'], CONFIG['BATCH_SIZE'], CONFIG['TIMESTEPS'], expected_features, scaler)
-        scaler = trained_scaler  # Ensure fitted scaler is used
-        # Save (including sentiment)
-        save_model_and_scaler(symbol, model, scaler, sentiment)
-        model_loaded = True  # Now loaded after training
-    
+    model_file = os.path.join(CONFIG['CACHE_DIR'], f"{symbol}_model.pth")
+    scaler_file = os.path.join(CONFIG['CACHE_DIR'], f"{symbol}_scaler.pkl")
+    if not force_train and os.path.exists(model_file) and os.path.exists(scaler_file):
+        model = TradingModel(CONFIG['TIMESTEPS'], expected_features)
+        model.load_state_dict(torch.load(model_file))
+        with open(scaler_file, 'rb') as f:
+            scaler = pickle.load(f)
+        model_loaded = True
+    else:
+        model, scaler = train_model(symbol, df, CONFIG['TRAIN_EPOCHS'], CONFIG['BATCH_SIZE'], CONFIG['TIMESTEPS'], expected_features)
+        torch.save(model.state_dict(), model_file)
+        with open(scaler_file, 'wb') as f:
+            pickle.dump(scaler, f)
+        model_loaded = False
     return symbol, df, model, scaler, data_loaded, sentiment, sentiment_loaded, model_loaded
 
 def backtest(symbol: str, model: nn.Module, scaler: RobustScaler, df: pd.DataFrame, initial_cash: float,
@@ -654,9 +704,21 @@ def backtest(symbol: str, model: nn.Module, scaler: RobustScaler, df: pd.DataFra
     trailing_stop_percentage = CONFIG['TRAILING_STOP_PERCENTAGE']
     risk_percentage = CONFIG['RISK_PERCENTAGE']
     
+    # Slice to out-of-sample backtest period
+    df_backtest = df[df.index >= pd.Timestamp(CONFIG['BACKTEST_START_DATE'], tz='UTC')].copy()
+    if len(df_backtest) < CONFIG['MIN_DATA_POINTS']:
+        raise ValueError(f"Insufficient backtest data for {symbol}: {len(df_backtest)} bars")
+
+    # Slice to out-of-sample backtest period
+    df_backtest = df[df.index >= pd.Timestamp(CONFIG['BACKTEST_START_DATE'], tz='UTC')].copy()
+    if len(df_backtest) < CONFIG['MIN_DATA_POINTS']:
+        raise ValueError(f"Insufficient backtest data for {symbol}: {len(df_backtest)} bars")
     # Preprocess for inference: Use trained scaler, no y or new fitting
+    df_backtest = df[df.index >= pd.Timestamp(CONFIG['BACKTEST_START_DATE'], tz='UTC')].copy()
+    if len(df_backtest) < CONFIG['MIN_DATA_POINTS']:
+        raise ValueError(f"Insufficient backtest data for {symbol}: {len(df_backtest)} bars")
     X_seq, y_ignore, scaler_ignore = preprocess_data(
-        df, timesteps, inference_mode=True, inference_scaler=scaler
+        df_backtest, timesteps, inference_mode=True, inference_scaler=scaler
     )
     
     model.eval()
@@ -695,7 +757,7 @@ def backtest(symbol: str, model: nn.Module, scaler: RobustScaler, df: pd.DataFra
     max_price = 0.0
     winning_trades = 0
     
-    timestamps = df['timestamp'].iloc[timesteps:].reset_index(drop=True)
+    timestamps = pd.Series(df.index[timesteps:]).reset_index(drop=True)
     sim_start = pd.Timestamp(CONFIG['BACKTEST_START_DATE'], tz='UTC')
     valid_timestamps = timestamps[timestamps >= sim_start]
     if valid_timestamps.empty:
@@ -889,15 +951,17 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
     need_training = any(load_model_and_scaler(symbol, expected_features, force_train)[0] is None for symbol in CONFIG['SYMBOLS'])
     progress_bar = tqdm(total=total_epochs, desc="Training Progress", bar_format="{l_bar}\033[32m{bar}\033[0m{r_bar}") if need_training else None
 
-    outputs = []
-    for symbol in tqdm(CONFIG['SYMBOLS'], desc="Processing symbols"):
-        output = train_symbol(symbol, expected_features, force_train)
-        outputs.append(output)
+    mp.set_start_method('spawn', force=True)  # For CUDA compatibility in multiprocessing
+
+    with mp.Pool(processes=CONFIG['NUM_PARALLEL_WORKERS']) as pool:
+        outputs = list(tqdm(pool.imap(train_wrapper, [(sym, expected_features, force_train) for sym in CONFIG['SYMBOLS']]),
+                            total=len(CONFIG['SYMBOLS']), desc="Processing symbols"))
+        # No per-symbol cuda.empty_cache() needed; clear after all if required
         if torch.cuda.is_available():
-            torch.cuda.empty_cache()  # Clear after each symbol
+            torch.cuda.empty_cache()
 
     # No pool cleanup needed
-    logger.info("Sequential processing completed; CUDA memory cleared per symbol.")
+    logger.info("Parallel processing completed; CUDA memory cleared.")
 
     sentiments = {}  # Collect sentiments for live consistency
     for symbol, df, model, scaler, data_loaded, sentiment, sentiment_loaded, model_loaded in outputs:
@@ -932,6 +996,20 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
         for line in info:
             print(line)
         print()
+
+    if backtest_only:
+        dfs_backtest = {}
+        now = datetime.now(timezone.utc)
+        end_date = now.strftime('%Y-%m-%d')
+        for symbol in tqdm(CONFIG['SYMBOLS'], desc="Fetching backtest data"):
+            dfs_backtest[symbol] = load_data(symbol, CONFIG['BACKTEST_START_DATE'], end_date)
+    else:
+        dfs_backtest = dfs  # Fallback, though not used in live
+
+    if backtest_only:
+        for symbol in tqdm(CONFIG['SYMBOLS'], desc="Adding indicators to backtest data"):
+            dfs_backtest[symbol] = add_technical_indicators(dfs_backtest[symbol])  # Compute TA-Lib indicators
+            dfs_backtest[symbol]['Sentiment'] = get_sentiment_score(symbol)  # Add sentiment; adjust function name if different
 
     if not backtest_only:
         portfolio_value = CONFIG['INITIAL_CASH']
@@ -1098,7 +1176,7 @@ Portfolio Value: ${portfolio_value:.2f}
         for symbol in CONFIG['SYMBOLS']:
             if symbol in models:
                 cash, returns, trade_count, win_rate = backtest(
-                    symbol, models[symbol], scalers[symbol], dfs[symbol], initial_per_symbol,
+                    symbol, models[symbol], scalers[symbol], dfs_backtest[symbol], initial_per_symbol,
                     CONFIG['STOP_LOSS_ATR_MULTIPLIER'], CONFIG['TAKE_PROFIT_ATR_MULTIPLIER'],
                     CONFIG['TIMESTEPS'], CONFIG['PREDICTION_THRESHOLD_BUY'], CONFIG['PREDICTION_THRESHOLD_SELL'],
                     CONFIG['MIN_HOLDING_PERIOD_MINUTES'], CONFIG['TRANSACTION_COST_PER_TRADE']
@@ -1116,4 +1194,5 @@ if __name__ == "__main__":
     parser.add_argument('--backtest', action='store_true', help="Run in backtest-only mode")
     parser.add_argument('--force-train', action='store_true', help="Force retraining of models")
     args = parser.parse_args()
+    mp.set_start_method('spawn', force=True)  # Set early for CUDA multiprocessing safety
     main(backtest_only=args.backtest, force_train=args.force_train)
