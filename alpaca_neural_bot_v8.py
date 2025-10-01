@@ -39,6 +39,7 @@ from tqdm import tqdm
 from colorama import Fore, Style
 import colorama
 import multiprocessing as mp
+import time
 
 # Suppress PyTorch warnings
 warnings.filterwarnings('ignore', category=UserWarning)
@@ -55,9 +56,9 @@ CONFIG = {
 
     # Data Fetching and Caching - Parameters for data retrieval and storage
     'TRAIN_DATA_START_DATE': '2015-01-01',  # Start date for training data
-    'TRAIN_END_DATE': '2022-12-31',  # End date for training data (to prevent leakage)
-    'VAL_START_DATE': '2023-01-01',  # Start date for validation data
-    'VAL_END_DATE': '2024-12-31',  # End date for validation data
+    'TRAIN_END_DATE': '2024-06-30',  # End date for training data (extended to include more recent data)
+    'VAL_START_DATE': '2024-07-01',  # Start date for validation data (shifted for recent validation)
+    'VAL_END_DATE': '2025-09-01',  # End date for validation data (include up to recent date for better generalization)
     'BACKTEST_START_DATE': '2025-01-01',  # Start date for backtesting (out-of-sample)
 
     'SIMULATION_DAYS': 180,  # Number of days for simulation
@@ -210,7 +211,11 @@ def load_data(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
 
 def train_wrapper(args):
     symbol, expected_features, force_train = args
-    return train_symbol(symbol, expected_features, force_train)
+    start_time_for_training = time.perf_counter()
+    result_from_train_symbol = train_symbol(symbol, expected_features, force_train)
+    end_time_for_training = time.perf_counter()
+    training_time_in_milliseconds = (end_time_for_training - start_time_for_training) * 1000
+    return (*result_from_train_symbol, training_time_in_milliseconds)
 
 #pyenv activate pytorch_env
 #python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.0.5.py --backtest --force-train
@@ -739,6 +744,14 @@ def backtest(symbol: str, model: nn.Module, scaler: RobustScaler, df: pd.DataFra
             del outputs  # Explicitly delete outputs tensor
     
     predictions = np.array(predictions)
+
+    true_y_for_accuracy = df['Future_Direction'].iloc[CONFIG['TIMESTEPS'] : ].values
+    valid_mask_for_accuracy = ~np.isnan(true_y_for_accuracy)
+    if np.any(valid_mask_for_accuracy):
+        accuracy_percentage = np.mean((np.array(predictions)[valid_mask_for_accuracy] > 0.5) == true_y_for_accuracy[valid_mask_for_accuracy]) * 100
+    else:
+        accuracy_percentage = 0.0
+    
     logger.info(f"Predictions for {symbol}: min={predictions.min():.3f}, max={predictions.max():.3f}, mean={predictions.mean():.3f}")
     
     # Clean up CUDA tensors
@@ -767,11 +780,11 @@ def backtest(symbol: str, model: nn.Module, scaler: RobustScaler, df: pd.DataFra
     logger.info(f"Backtest for {symbol}: starting cash=${cash:.2f}, k_start={k_start}, len(predictions)={len(predictions)}")
     if k_start >= len(predictions):
         logger.warning(f"No data points for backtest of {symbol}")
-        return cash, returns, trade_count, win_rate
+        return cash, returns, trade_count, win_rate, 0.0
     num_backtest_steps = len(predictions) - k_start
     if num_backtest_steps <= 0:
         logger.warning(f"No backtest steps available for {symbol} (num_backtest_steps={num_backtest_steps})")
-        return cash, returns, trade_count, win_rate
+        return cash, returns, trade_count, win_rate, 0.0
     
     atr = df['ATR'].iloc[timesteps + k_start:timesteps + k_start + num_backtest_steps].values
     prices = df['close'].iloc[timesteps + k_start:timesteps + k_start + num_backtest_steps].values
@@ -857,7 +870,7 @@ def backtest(symbol: str, model: nn.Module, scaler: RobustScaler, df: pd.DataFra
         if ret > 0:
             winning_trades += 1
     win_rate = (winning_trades / trade_count * 100) if trade_count > 0 else 0.0
-    return cash, returns, trade_count, win_rate
+    return cash, returns, trade_count, win_rate, accuracy_percentage
 
 def calculate_performance_metrics(returns: List[float], cash: float, initial_cash: float) -> Dict[str, float]:
     """Calculate performance metrics."""
@@ -952,7 +965,7 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
     progress_bar = tqdm(total=total_epochs, desc="Training Progress", bar_format="{l_bar}\033[32m{bar}\033[0m{r_bar}") if need_training else None
 
     mp.set_start_method('spawn', force=True)  # For CUDA compatibility in multiprocessing
-
+    start_total_training_time = time.perf_counter()
     with mp.Pool(processes=CONFIG['NUM_PARALLEL_WORKERS']) as pool:
         outputs = list(tqdm(pool.imap(train_wrapper, [(sym, expected_features, force_train) for sym in CONFIG['SYMBOLS']]),
                             total=len(CONFIG['SYMBOLS']), desc="Processing symbols"))
@@ -963,8 +976,13 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
     # No pool cleanup needed
     logger.info("Parallel processing completed; CUDA memory cleared.")
 
+    end_total_training_time = time.perf_counter()
+    total_training_time_in_milliseconds = (end_total_training_time - start_total_training_time) * 1000
+    training_times_dictionary = {}
+
     sentiments = {}  # Collect sentiments for live consistency
-    for symbol, df, model, scaler, data_loaded, sentiment, sentiment_loaded, model_loaded in outputs:
+    for symbol, df, model, scaler, data_loaded, sentiment, sentiment_loaded, model_loaded, training_time_in_milliseconds in outputs:
+        training_times_dictionary[symbol] = training_time_in_milliseconds
         dfs[symbol] = df
         models[symbol] = model
         scalers[symbol] = scaler
@@ -1010,6 +1028,9 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
         for symbol in tqdm(CONFIG['SYMBOLS'], desc="Adding indicators to backtest data"):
             dfs_backtest[symbol] = add_technical_indicators(dfs_backtest[symbol])  # Compute TA-Lib indicators
             dfs_backtest[symbol]['Sentiment'] = get_sentiment_score(symbol)  # Add sentiment; adjust function name if different
+    
+    for symbol in CONFIG['SYMBOLS']:
+        dfs_backtest[symbol]['Future_Direction'] = (dfs_backtest[symbol]['close'].shift(-CONFIG['LOOK_AHEAD_BARS']) > dfs_backtest[symbol]['close']).astype(int)
 
     if not backtest_only:
         portfolio_value = CONFIG['INITIAL_CASH']
@@ -1167,25 +1188,85 @@ Portfolio Value: ${portfolio_value:.2f}
                 print()
 
     else:
+        backtest_times_dictionary = {}
+        accuracies_dictionary = {}
+        start_total_backtest_time = time.perf_counter()
         initial_cash = CONFIG['INITIAL_CASH']
-        final_value = initial_cash
+        final_value = 0  # Initialize to 0 to sum per-symbol ending cash
         symbol_results = {}
         trade_counts = {}
         win_rates = {}
         initial_per_symbol = CONFIG['INITIAL_CASH'] / len(CONFIG['SYMBOLS'])
         for symbol in CONFIG['SYMBOLS']:
             if symbol in models:
-                cash, returns, trade_count, win_rate = backtest(
+                start_backtest_time_for_symbol = time.perf_counter()
+                cash, returns, trade_count, win_rate, accuracy_percentage = backtest(
                     symbol, models[symbol], scalers[symbol], dfs_backtest[symbol], initial_per_symbol,
                     CONFIG['STOP_LOSS_ATR_MULTIPLIER'], CONFIG['TAKE_PROFIT_ATR_MULTIPLIER'],
                     CONFIG['TIMESTEPS'], CONFIG['PREDICTION_THRESHOLD_BUY'], CONFIG['PREDICTION_THRESHOLD_SELL'],
                     CONFIG['MIN_HOLDING_PERIOD_MINUTES'], CONFIG['TRANSACTION_COST_PER_TRADE']
                 )
-                final_value += cash - initial_per_symbol
-                symbol_results[symbol] = calculate_performance_metrics(returns, cash, initial_per_symbol)
                 trade_counts[symbol] = trade_count
-                win_rates[symbol] = win_rate
+                win_rates[symbol] = win_rate    
+                end_backtest_time_for_symbol = time.perf_counter()
+                backtest_times_dictionary[symbol] = (end_backtest_time_for_symbol - start_backtest_time_for_symbol) * 1000
+                accuracies_dictionary[symbol] = accuracy_percentage
+                final_value += cash
+                try:
+                    symbol_results[symbol] = calculate_performance_metrics(returns, cash, initial_per_symbol)
+                except Exception as e:
+                    logger.error(f"Error calculating metrics for {symbol}: {str(e)}")
+                    symbol_results[symbol] = {
+                        'total_return': (cash - initial_per_symbol) / initial_per_symbol * 100 if initial_per_symbol > 0 else 0.0,
+                        'sharpe_ratio': 0.0,
+                        'max_drawdown': 0.0
+                    }
+                    logger.warning(f"Metrics calculation failed for {symbol}; using defaults.")
         email_body = format_email_body(initial_cash, final_value, symbol_results, trade_counts, win_rates)
+        for symbol in CONFIG['SYMBOLS']:
+            if symbol not in symbol_results:
+                # Default if metrics calculation failed
+                cash = initial_per_symbol  # Assume no change if not set
+                symbol_results[symbol] = {
+                    'total_return': 0.0,
+                    'sharpe_ratio': 0.0,
+                    'max_drawdown': 0.0
+                }
+                logger.warning(f"Metrics calculation failed for {symbol}; using defaults.")
+        
+        
+        end_total_backtest_time = time.perf_counter()
+        total_backtest_time_in_milliseconds = (end_total_backtest_time - start_total_backtest_time) * 1000
+        
+        def format_time(ms):
+            minutes = int(ms // 60000)
+            seconds = int((ms % 60000) // 1000)
+            milliseconds = int(ms % 1000)
+            return f"{minutes:02d}:{seconds:02d}.{milliseconds:03d}"
+        
+        print(f"{Fore.CYAN}Training Times (mm:ss.mmm):{Style.RESET_ALL}")
+        for symbol_in_training_times, time_in_ms in training_times_dictionary.items():
+            print(f"  {symbol_in_training_times}: {format_time(time_in_ms)}")
+        print(f"Total Training Time: {format_time(total_training_time_in_milliseconds)}")
+
+        print(f"{Fore.CYAN}Backtest Times (mm:ss.mmm):{Style.RESET_ALL}")
+        for symbol_in_backtest_times, time_in_ms in backtest_times_dictionary.items():
+            print(f"  {symbol_in_backtest_times}: {format_time(time_in_ms)}")
+        print(f"Total Backtest Time: {format_time(total_backtest_time_in_milliseconds)}")
+
+        print(f"Total Time (Training + Backtest): {format_time(total_training_time_in_milliseconds + total_backtest_time_in_milliseconds)}")
+
+        print(f"{Fore.GREEN}Backtest Performance Summary:{Style.RESET_ALL}")
+        print(f"{'Symbol':<8} {'Total Return (%)':<18} {'Sharpe Ratio':<14} {'Max Drawdown (%)':<20} {'Trades':<8} {'Win Rate (%)':<14} {'Accuracy (%)':<14}")
+        for symbol in CONFIG['SYMBOLS']:
+            if symbol in symbol_results:
+                metrics_for_symbol = symbol_results[symbol]
+                return_color = Fore.GREEN if metrics_for_symbol['total_return'] > 0 else Fore.RED
+                drawdown_color = Fore.RED if metrics_for_symbol['max_drawdown'] > 0 else Fore.GREEN
+                win_rate_color = Fore.GREEN if win_rates[symbol] > 50 else Fore.RED
+                accuracy = accuracies_dictionary.get(symbol, 0) if trade_counts.get(symbol, 0) > 0 else 0.0  # Hide accuracy if no trades
+                accuracy_color = Fore.GREEN if accuracy > 50 else Fore.RED
+                print(f"{symbol:<8} {return_color}{metrics_for_symbol['total_return']:<18.3f}{Style.RESET_ALL} {metrics_for_symbol['sharpe_ratio']:<14.3f} {drawdown_color}{metrics_for_symbol['max_drawdown']:<20.3f}{Style.RESET_ALL} {trade_counts.get(symbol, 0):<8} {win_rate_color}{win_rates.get(symbol, 0):<14.3f}{Style.RESET_ALL} {accuracy_color}{accuracy:<14.3f}{Style.RESET_ALL}")
         send_email("Backtest Completed", email_body)
         logger.info(f"Backtest completed: Final value: ${final_value:.2f}")
 
