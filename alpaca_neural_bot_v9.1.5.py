@@ -1,6 +1,6 @@
 
 # +------------------------------------------------------------------------------+
-# |                            Alpaca Neural Bot v9.0.5                          |
+# |                            Alpaca Neural Bot v9.1.5                          |
 # +------------------------------------------------------------------------------+
 # | Author: Vladimir Makarov                                                     |
 # | Project Start Date: May 9, 2025                                              |
@@ -95,17 +95,17 @@ CONFIG = {
     'LOG_FILE': 'trades.log',  # File for logging trades
 
     # Strategy Thresholds - Thresholds for trading decisions
-    'CONFIDENCE_THRESHOLD': 0.55,  # Threshold for prediction confidence (raised to use model more selectively)
-    'PREDICTION_THRESHOLD_BUY': 0.55,  # Threshold for buy signal (lowered to allow more opportunities while above 0.5)
-    'PREDICTION_THRESHOLD_SELL': 0.45,  # Threshold for sell signal (increased for more balanced exits)
+    'CONFIDENCE_THRESHOLD': 0.53,  # Lowered to capture more predictions above neutral while maintaining selectivity
+    'PREDICTION_THRESHOLD_BUY': 0.52,  # Lowered to allow more buy opportunities based on prediction distribution
+    'PREDICTION_THRESHOLD_SELL': 0.40,  # Tightened for quicker exits to reduce losses in downtrends
     'RSI_BUY_THRESHOLD': 55,  # RSI threshold for buying (lowered for stronger oversold signals)
     'RSI_SELL_THRESHOLD': 40,  # RSI threshold for selling (raised for stronger overbought signals)
-    'ADX_TREND_THRESHOLD': 25,  # Threshold for ADX trend strength (lowered to capture more trends)
-    'MAX_VOLATILITY': 2.0,  # Maximum allowed volatility (increased to include more market conditions)
+    'ADX_TREND_THRESHOLD': 20,  # Lowered to include weaker trends common in stable stocks like MSFT/AAPL
+    'MAX_VOLATILITY': 3.0,  # Increased to include volatile symbols like TSLA/META without excluding opportunities
 
     # Risk Management - Parameters to control trading risk
     'MAX_DRAWDOWN_LIMIT': 0.04,  # Maximum allowed drawdown
-    'RISK_PERCENTAGE': 0.02,  # Percentage of cash to risk per trade (halved for smaller positions)
+    'RISK_PERCENTAGE': 0.06,  # Percentage of cash to risk per trade (halved for smaller positions)
     'STOP_LOSS_ATR_MULTIPLIER': 1.5,  # Multiplier for ATR-based stop loss (widened to reduce whipsaws)
     'TAKE_PROFIT_ATR_MULTIPLIER': 3.0,  # Multiplier for ATR-based take profit (tightened for quicker exits)
     'TRAILING_STOP_PERCENTAGE': 0.09,  # Percentage for trailing stop (widened slightly)
@@ -119,7 +119,12 @@ CONFIG = {
     # API Retry Settings - Configuration for handling API failures
     'API_RETRY_ATTEMPTS': 3,  # Number of retry attempts for API calls
     'API_RETRY_DELAY': 1000,  # Delay between retry attempts in milliseconds
+    'MODEL_VERSION': 'v915',  # Model architecture version; increment on structural changes to force retrain
 }
+
+#pyenv activate pytorch_env
+#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.1.4.py --backtest --force-train
+
 
 def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -217,8 +222,6 @@ def train_wrapper(args):
     training_time_in_milliseconds = (end_time_for_training - start_time_for_training) * 1000
     return (*result_from_train_symbol, training_time_in_milliseconds)
 
-#pyenv activate pytorch_env
-#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.0.5.py --backtest --force-train
 
 # Configure logging
 root_logger = logging.getLogger()
@@ -471,7 +474,7 @@ def preprocess_data(df: pd.DataFrame, timesteps: int, add_noise: bool = False, i
         y_seq = None
     
     if add_noise:
-        X += np.random.normal(0, 0.02, X.shape)
+        X += np.random.normal(0, 0.005, X.shape)
     
     N = X.shape[0]
     num_sequences = N - timesteps
@@ -493,10 +496,10 @@ def preprocess_data(df: pd.DataFrame, timesteps: int, add_noise: bool = False, i
 class TradingModel(nn.Module):
     def __init__(self, timesteps: int, features: int):
         super(TradingModel, self).__init__()
-        self.lstm = nn.LSTM(input_size=features, hidden_size=64, num_layers=1, batch_first=True, dropout=0.1)
-        self.attention = nn.MultiheadAttention(embed_dim=64, num_heads=4, dropout=0.1, batch_first=True)  # Add attention
-        self.dense1 = nn.Linear(64, 32)
-        self.dense2 = nn.Linear(32, 1)
+        self.lstm = nn.LSTM(input_size=features, hidden_size=128, num_layers=2, batch_first=True, dropout=0.2)  # Increased capacity and dropout for regularization
+        self.attention = nn.MultiheadAttention(embed_dim=128, num_heads=8, dropout=0.1, batch_first=True)  # Match hidden size, more heads
+        self.dense1 = nn.Linear(128, 64)  # Adjust linear to match
+        self.dense2 = nn.Linear(64, 1)
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(0.1)
         nn.init.xavier_uniform_(self.dense1.weight)
@@ -530,7 +533,9 @@ def train_model(symbol: str, df: pd.DataFrame, epochs: int, batch_size: int, tim
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = TradingModel(timesteps, expected_features).to(device)
     optimizer = optim.Adam(model.parameters(), lr=CONFIG['LEARNING_RATE'])
-    criterion = nn.BCEWithLogitsLoss()
+    # Compute pos_weight based on class balance (up fraction ~0.5, so weight positives slightly higher for confidence)
+    pos_weight = torch.tensor([1.1])  # Slight bias; adjust based on empirical balance (e.g., 1 / up_fraction if imbalanced)
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight.to(device))
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=CONFIG['LR_SCHEDULER_PATIENCE'], factor=CONFIG['LR_REDUCTION_FACTOR'])
     best_val_loss = float('inf')
     patience_counter = 0
@@ -680,13 +685,21 @@ def train_symbol(symbol: str, expected_features: int, force_train: bool) -> Tupl
     scaler_file = os.path.join(CONFIG['CACHE_DIR'], f"{symbol}_scaler.pkl")
     if not force_train and os.path.exists(model_file) and os.path.exists(scaler_file):
         model = TradingModel(CONFIG['TIMESTEPS'], expected_features)
-        model.load_state_dict(torch.load(model_file))
+        checkpoint = torch.load(model_file)
+        if 'version' not in checkpoint or checkpoint['version'] != CONFIG['MODEL_VERSION']:
+            logger.info(f"Model version mismatch for {symbol} (expected {CONFIG['MODEL_VERSION']}, got {checkpoint.get('version', 'none')}); retraining.")
+            return None, None  # Or set to trigger retrain
+        model.load_state_dict(checkpoint['state_dict'])
         with open(scaler_file, 'rb') as f:
             scaler = pickle.load(f)
         model_loaded = True
     else:
         model, scaler = train_model(symbol, df, CONFIG['TRAIN_EPOCHS'], CONFIG['BATCH_SIZE'], CONFIG['TIMESTEPS'], expected_features)
-        torch.save(model.state_dict(), model_file)
+        # Save with version for architecture compatibility
+        torch.save({
+            'version': CONFIG['MODEL_VERSION'],
+            'state_dict': model.state_dict()
+        }, model_file)
         with open(scaler_file, 'wb') as f:
             pickle.dump(scaler, f)
         model_loaded = False
@@ -924,7 +937,9 @@ def make_prediction(model: nn.Module, X: np.ndarray) -> float:
     with torch.no_grad():
         X_tensor = torch.FloatTensor(X).to(device)
         output = model(X_tensor)
-        prediction = torch.sigmoid(output).cpu().item()  # Convert logits to probability
+        temperature = 0.8  # <1 sharpens confidence; tune 0.5-0.9
+        scaled_logits = output / temperature
+        prediction = torch.sigmoid(scaled_logits).cpu().item()  # Convert logits to probability
         if not np.isfinite(prediction):
             logger.error("Invalid prediction value: non-finite")
             raise ValueError("Prediction resulted in non-finite value")
@@ -1051,6 +1066,7 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
                     time.sleep(seconds_to_sleep)
                 
                 account = trading_client.get_account()
+                cash = float(account.cash)
                 portfolio_value = float(account.equity)
                 peak_value = max(peak_value, portfolio_value)
                 drawdown = (peak_value - portfolio_value) / peak_value
@@ -1085,7 +1101,7 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
                             current_volatility = df['Volatility'].iloc[-1] if not df.empty and 'Volatility' in df.columns else 0.0
                             atr_val = df['ATR'].iloc[-1] if not df.empty and 'ATR' in df.columns else 0.0
                         else:
-                            X_seq, _, _ = preprocess_data(df, CONFIG['TIMESTEPS'], inference_mode=True, inference_scaler=scalers[symbol])
+                            X_seq, _, _ = preprocess_data(df, CONFIG['TIMESTEPS'], inference_mode=True, inference_scaler=scalers[symbol], fit_scaler=False)
                             # Use the most recent sequence for live prediction
                             recent_seq = X_seq[-1:].astype(np.float32)
                             model = models[symbol].to(device)
@@ -1120,7 +1136,99 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
                             decision = "Hold (Low Confidence)"
                         elif qty_owned == 0 and prediction > max(CONFIG['PREDICTION_THRESHOLD_BUY'], CONFIG['CONFIDENCE_THRESHOLD']) and current_rsi < CONFIG['RSI_BUY_THRESHOLD']:
                             decision = "Buy"
-                            # ... (rest of buy logic unchanged)
+                            if atr_val > 0:
+                                risk_per_trade = cash * (CONFIG['RISK_PERCENTAGE'] / 100)
+                                stop_loss_distance = atr_val * CONFIG['STOP_LOSS_ATR_MULTIPLIER']
+                                qty = max(1, int(risk_per_trade / stop_loss_distance))
+                                cost = qty * price + CONFIG['TRANSACTION_COST_PER_TRADE']
+                                if cost <= cash:
+                                    logger.info(f"Submitting buy order for {qty} shares of {symbol} at ${price:.2f}")
+                                    order = MarketOrderRequest(
+                                        symbol=symbol,
+                                        qty=qty,
+                                        side=OrderSide.BUY,
+                                        time_in_force=TimeInForce.GTC
+                                    )
+                                    try:
+                                        trading_client.submit_order(order)
+                                        email_body = f"""
+Bought {qty} shares of {symbol} at ${price:.2f}
+Prediction Confidence: {prediction:.3f}
+RSI: {current_rsi:.2f}
+ADX: {current_adx:.2f}
+Volatility: {current_volatility:.2f}
+ATR: {atr_val:.2f}
+Current Cash: ${cash - cost:.2f}
+Portfolio Value: ${portfolio_value:.2f}
+"""
+                                        send_email(f"Trade Update: Bought {symbol}", email_body)
+                                    except Exception as e:
+                                        logger.error(f"Failed to submit buy order for {symbol}: {str(e)}")
+                                        decision = "Buy (Failed)"
+                                        email_body = f"""
+Failed to buy {qty} shares of {symbol} at ${price:.2f}
+Error: {str(e)}
+Prediction Confidence: {prediction:.3f}
+RSI: {current_rsi:.2f}
+ADX: {current_adx:.2f}
+Volatility: {current_volatility:.2f}
+ATR: {atr_val:.2f}
+Current Cash: ${cash:.2f}
+Portfolio Value: ${portfolio_value:.2f}
+"""
+                                        send_email(f"Trade Failure: {symbol}", email_body)
+                                else:
+                                    logger.warning(f"Insufficient cash for buy {symbol}: cost={cost:.2f}, cash={cash:.2f}")
+                                    decision = "Hold (Insufficient Cash)"
+                            else:
+                                logger.warning(f"Invalid ATR for {symbol}: {atr_val}")
+                                decision = "Hold (Invalid ATR)"
+                        elif qty_owned > 0 and time_held >= CONFIG['MIN_HOLDING_PERIOD_MINUTES']:
+                            # Compute stops using current price
+                            max_price = max(float(position_obj.current_price) if position_obj else price, price)
+                            trailing_stop = max_price * (1 - CONFIG['TRAILING_STOP_PERCENTAGE'])
+                            stop_loss = entry_price - CONFIG['STOP_LOSS_ATR_MULTIPLIER'] * atr_val
+                            take_profit = entry_price + CONFIG['TAKE_PROFIT_ATR_MULTIPLIER'] * atr_val
+                            if price <= trailing_stop or price <= stop_loss or price >= take_profit or (prediction < CONFIG['PREDICTION_THRESHOLD_SELL'] and current_rsi > CONFIG['RSI_SELL_THRESHOLD']):
+                                decision = "Sell"
+                                logger.info(f"Sell attempt for {symbol}: qty={qty_owned}, price=${price:.2f}, prediction={prediction:.3f}")
+                                order = MarketOrderRequest(symbol=symbol, qty=qty_owned, side=OrderSide.SELL, time_in_force=TimeInForce.GTC)
+                                try:
+                                    trading_client.submit_order(order)
+                                    email_body = f"""
+Sold {qty_owned} shares of {symbol} at ${price:.2f}
+Prediction Confidence: {prediction:.3f}
+RSI: {current_rsi:.2f}
+ADX: {current_adx:.2f}
+Volatility: {current_volatility:.2f}
+ATR: {atr_val:.2f}
+Time Held: {time_held:.2f} minutes
+Current Cash: ${float(account.cash):.2f}
+Portfolio Value: ${portfolio_value:.2f}
+"""
+                                    send_email(f"Trade Update: {symbol}", email_body)
+                                except Exception as e:
+                                    logger.error(f"Failed to submit sell order for {symbol}: {str(e)}")
+                                    decision = "Hold"
+                                    email_body = f"""
+Failed to sell {qty_owned} shares of {symbol} at ${price:.2f}
+Error: {str(e)}
+Prediction Confidence: {prediction:.3f}
+RSI: {current_rsi:.2f}
+ADX: {current_adx:.2f}
+Volatility: {current_volatility:.2f}
+ATR: {atr_val:.2f}
+Time Held: {time_held:.2f} minutes
+Current Cash: ${float(account.cash):.2f}
+Portfolio Value: ${portfolio_value:.2f}
+"""
+                                    send_email(f"Trade Failure: {symbol}", email_body)
+                                else:
+                                    logger.warning(f"Insufficient cash for buy {symbol}: cost={cost:.2f}, cash={cash:.2f}")
+                                    decision = "Hold (Insufficient Cash)"
+                            else:
+                                logger.warning(f"Invalid ATR for {symbol}: {atr_val}")
+                                decision = "Hold (Invalid ATR)"
                         elif qty_owned > 0 and time_held >= CONFIG['MIN_HOLDING_PERIOD_MINUTES']:
                             # Compute stops using current price
                             max_price = max(float(position_obj.current_price) if position_obj else price, price)
