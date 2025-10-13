@@ -1,11 +1,11 @@
 
 # +------------------------------------------------------------------------------+
-# |                            Alpaca Neural Bot v9.1.5                          |
+# |                            Alpaca Neural Bot v9.1.4.1                        |
 # +------------------------------------------------------------------------------+
 # | Author: Vladimir Makarov                                                     |
 # | Project Start Date: May 9, 2025                                              |
 # | License: GNU Lesser General Public License v2.1                              |
-# | Version: 9.0.5 (Un-Released)                                                 |
+# | Version: 9.1.4.1 (Un-Released)                                               |
 # +------------------------------------------------------------------------------+
 
 import os
@@ -65,7 +65,7 @@ CONFIG = {
     'MIN_DATA_POINTS': 100,  # Minimum data points required for processing
     'CACHE_DIR': './cache',  # Directory for caching data
     'CACHE_EXPIRY_SECONDS': 24 * 60 * 60,  # Expiry time for cached data in seconds
-    'LIVE_DATA_BARS': 200,  # Number of bars to fetch for live data
+    'LIVE_DATA_BARS': 500,  # Number of bars to fetch for live data
 
     # Model Training - Settings for training the machine learning model
     'TRAIN_EPOCHS': 100,  # Number of epochs for training the model
@@ -97,7 +97,7 @@ CONFIG = {
     # Strategy Thresholds - Thresholds for trading decisions
     'CONFIDENCE_THRESHOLD': 0.53,  # Lowered to capture more predictions above neutral while maintaining selectivity
     'PREDICTION_THRESHOLD_BUY': 0.52,  # Lowered to allow more buy opportunities based on prediction distribution
-    'PREDICTION_THRESHOLD_SELL': 0.40,  # Tightened for quicker exits to reduce losses in downtrends
+    'PREDICTION_THRESHOLD_SELL': 0.50,  # Tightened for quicker exits to reduce losses in downtrends
     'RSI_BUY_THRESHOLD': 55,  # RSI threshold for buying (lowered for stronger oversold signals)
     'RSI_SELL_THRESHOLD': 40,  # RSI threshold for selling (raised for stronger overbought signals)
     'ADX_TREND_THRESHOLD': 20,  # Lowered to include weaker trends common in stable stocks like MSFT/AAPL
@@ -119,11 +119,11 @@ CONFIG = {
     # API Retry Settings - Configuration for handling API failures
     'API_RETRY_ATTEMPTS': 3,  # Number of retry attempts for API calls
     'API_RETRY_DELAY': 1000,  # Delay between retry attempts in milliseconds
-    'MODEL_VERSION': 'v915',  # Model architecture version; increment on structural changes to force retrain
+    'MODEL_VERSION': 'v9141',  # Model architecture version; increment on structural changes to force retrain
 }
 
 #pyenv activate pytorch_env
-#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.1.4.py --backtest --force-train
+#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.1.4.1.py --backtest --force-train
 
 
 def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -274,6 +274,25 @@ def create_cache_directory() -> None:
     wait=wait_fixed(CONFIG['API_RETRY_DELAY'] / 1000),
     retry=retry_if_exception_type(Exception)
 )
+def fetch_recent_data(symbol: str, num_bars: int) -> pd.DataFrame:
+    """Fetch recent bars for live trading."""
+    client = StockHistoricalDataClient(CONFIG['ALPACA_API_KEY'], CONFIG['ALPACA_SECRET_KEY'])
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=10)
+    request = StockBarsRequest(
+        symbol_or_symbols=symbol,
+        timeframe=CONFIG['TIMEFRAME'],
+        start=start_date,
+        end=end_date,
+        limit=num_bars
+    )
+    bars = client.get_stock_bars(request).df
+    if bars.empty:
+        raise ValueError(f"No recent data for {symbol}")
+    df = bars.reset_index().rename(columns={'vwap': 'VWAP'})
+    logger.info(f"Fetched {len(df)} recent bars for {symbol}")
+    return df.sort_values('timestamp')
+
 def fetch_data(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
     """Fetch historical bar data from Alpaca API in yearly increments."""
     try:
@@ -340,6 +359,7 @@ def fetch_recent_data(symbol: str, num_bars: int) -> pd.DataFrame:
     """Fetch recent bars for live trading."""
     client = StockHistoricalDataClient(CONFIG['ALPACA_API_KEY'], CONFIG['ALPACA_SECRET_KEY'])
     end_date = datetime.now()
+    start_date = end_date - timedelta(days=10)
     start_date = end_date - timedelta(days=3)
     request = StockBarsRequest(
         symbol_or_symbols=symbol,
