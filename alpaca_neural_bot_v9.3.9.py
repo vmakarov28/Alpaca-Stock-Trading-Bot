@@ -1,11 +1,11 @@
 
 # +------------------------------------------------------------------------------+
-# |                            Alpaca Neural Bot v9.3.5                          |
+# |                            Alpaca Neural Bot v9.3.9                          |
 # +------------------------------------------------------------------------------+
 # | Author: Vladimir Makarov                                                     |
 # | Project Start Date: May 9, 2025                                              |
 # | License: GNU Lesser General Public License v2.1                              |
-# | Version: 9.3.5 (Un-Released)                                                 |
+# | Version: 9.3.9 (Un-Released)                                                 |
 # +------------------------------------------------------------------------------+
 
 import os  # For operating system interactions, like creating directories and handling file paths
@@ -129,14 +129,14 @@ CONFIG = {
     'ENABLE_RETRAIN_CYCLE': True,  # Enable loop to retrain until criteria met (backtest mode only)
     'MIN_FINAL_VALUE': 130000.0,  # Minimum final portfolio value to accept
     'MAX_ALLOWED_DRAWDOWN': 35.0,  # Maximum allowed max_drawdown percentage (across symbols)
-    'MAX_RETRAIN_ATTEMPTS': 28,  # Max loop iterations to prevent infinite runs
+    'MAX_RETRAIN_ATTEMPTS': 100,  # Max loop iterations to prevent infinite runs
 
     #Monte Carlo Probability Simulation
     'NUM_MC_SIMULATIONS': 50000,  # Number of Monte Carlo simulations for backtest robustness testing
 }
 
 #pyenv activate pytorch_env
-#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.3.5.py --backtest --force-train
+#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.3.8.py --backtest --force-train
 
 
 def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -714,41 +714,70 @@ def train_model(symbol: str, df: pd.DataFrame, epochs: int, batch_size: int, tim
 
 def load_model_and_scaler(symbol: str, expected_features: int, force_retrain: bool = False) -> Tuple[Optional[nn.Module], Optional[RobustScaler], Optional[float]]:
     """Load trained model and scaler from cache or return None to trigger training."""
+    logger.info(f"Entering load_model_and_scaler for {symbol} (force_retrain={force_retrain}).")
     if force_retrain:
         return None, None, None
     
     model_path = os.path.join(CONFIG['MODEL_CACHE_DIR'], f"{symbol}_model_{CONFIG['MODEL_VERSION']}.pth")
     scaler_path = os.path.join(CONFIG['MODEL_CACHE_DIR'], f"{symbol}_scaler_{CONFIG['MODEL_VERSION']}.pkl")
-    sentiment_path = os.path.join(CONFIG['MODEL_CACHE_DIR'], f"{symbol}_sentiment_{CONFIG['MODEL_VERSION']}.pkl")
+    sentiment_path = os.path.join(CONFIG['MODEL_CACHE_DIR'], f"{symbol}_news_sentiment_{CONFIG['MODEL_VERSION']}.pkl")
     
     if os.path.exists(model_path) and os.path.exists(scaler_path):
+        logger.info(f"Found model file for {symbol} at {model_path} (size: {os.path.getsize(model_path)} bytes). Attempting load.")
+        logger.info(f"Found scaler file for {symbol} at {scaler_path} (size: {os.path.getsize(scaler_path)} bytes). Attempting load.")
         try:
             # Load scaler first (less error-prone)
             with open(scaler_path, 'rb') as f:
                 scaler = pickle.load(f)
             
-            # Load model with class name handling
+            # Load model with improved flexible handling
             checkpoint = torch.load(model_path, map_location='cpu')
-            model_class_name = checkpoint.get('class_name', 'TradingModel')  # Check saved metadata
-            if model_class_name == 'CNNLSTMModel':
-                # Fallback: Instantiate current class and load state_dict (ignores old class)
-                logger.warning(f"Legacy model for {symbol} detected. Loading state into current TradingModel.")
-                model = TradingModel(CONFIG['TIMESTEPS'], expected_features)
+            model = TradingModel(CONFIG['TIMESTEPS'], expected_features)
+            if isinstance(checkpoint, dict):
+                if 'state_dict' in checkpoint:  # Handle {'version': ..., 'state_dict': ...} format
+                    if 'version' in checkpoint and checkpoint['version'] != CONFIG['MODEL_VERSION']:
+                        logger.warning(f"Version mismatch for {symbol} (saved: {checkpoint['version']}, current: {CONFIG['MODEL_VERSION']}). Deleting cache and retraining.")
+                        # Clean up invalid files
+                        if os.path.exists(model_path):
+                            os.remove(model_path)
+                        if os.path.exists(scaler_path):
+                            os.remove(scaler_path)
+                        if os.path.exists(sentiment_path):
+                            os.remove(sentiment_path)
+                        best_model_path = os.path.join(CONFIG['MODEL_CACHE_DIR'], f"{symbol}_best_model.pth")
+                        if os.path.exists(best_model_path):
+                            os.remove(best_model_path)
+                        return None, None, None
+                    model.load_state_dict(checkpoint['state_dict'])
+                    logger.info(f"Loaded dict-format model with 'state_dict' key for {symbol}.")
+                elif 'model_state_dict' in checkpoint:  # Existing modern format
+                    model_class_name = checkpoint.get('class_name', 'TradingModel')
+                    if model_class_name == 'CNNLSTMModel':
+                        logger.warning(f"Legacy class for {symbol} detected. Loading state into current TradingModel (assuming key compatibility).")
+                    model.load_state_dict(checkpoint['model_state_dict'])
+                    logger.info(f"Loaded modern dict-format model for {symbol}.")
+                else:
+                    # Legacy direct state_dict (OrderedDict is dict, but no specific keys)
+                    logger.warning(f"Direct state_dict save detected for {symbol} (legacy format). Loading directly.")
+                    model.load_state_dict(checkpoint)
             else:
-                model = TradingModel(CONFIG['TIMESTEPS'], expected_features)
-            model.load_state_dict(checkpoint['model_state_dict'])
+                # Rare non-dict case (shouldn't happen for torch saves)
+                logger.error(f"Unexpected checkpoint type for {symbol}: {type(checkpoint)}. Skipping load.")
+                raise TypeError("Invalid checkpoint format")
             
             # Load associated training sentiment if available
             training_sentiment = None
             if os.path.exists(sentiment_path):
+                logger.info(f"Found sentiment file for {symbol} at {sentiment_path} (size: {os.path.getsize(sentiment_path)} bytes). Loading.")
                 with open(sentiment_path, 'rb') as f:
                     training_sentiment = pickle.load(f)
             
-            logger.info(f"Loaded cached model and scaler for {symbol}.")
+            logger.info(f"Successfully loaded cached model and scaler for {symbol}.")
             return model, scaler, training_sentiment
-        except (KeyError, AttributeError, NameError) as e:
-            if 'CNNLSTMModel' in str(e) or 'not defined' in str(e):
-                logger.warning(f"Class mismatch for {symbol} (likely legacy CNNLSTMModel). Deleting cache and retraining.")
+        except (KeyError, AttributeError, NameError, ValueError) as e:
+            # Expanded to catch load_state_dict mismatches (e.g., incompatible keys)
+            if 'CNNLSTMModel' in str(e) or 'not defined' in str(e) or 'model_state_dict' in str(e) or 'size mismatch' in str(e):
+                logger.warning(f"Format, class, or key mismatch for {symbol} (likely incompatible legacy). Deleting cache and retraining.")
                 # Clean up invalid files
                 if os.path.exists(model_path):
                     os.remove(model_path)
@@ -767,15 +796,15 @@ def load_model_and_scaler(symbol: str, expected_features: int, force_retrain: bo
             logger.error(f"Unexpected error loading for {symbol}: {str(e)}. Retraining.")
             return None, None, None
     else:
-        logger.info(f"No cached model/scaler for {symbol}. Will train.")
+        logger.info(f"No cached model/scaler for {symbol} (checked {model_path} and {scaler_path}). Will train.")
         return None, None, None
 
 def save_model_and_scaler(symbol: str, model: nn.Module, scaler: RobustScaler, sentiment: float) -> None:
     """Save the trained model and scaler to cache files."""
     try:
-        model_path = os.path.join(CONFIG['MODEL_CACHE_DIR'], f"{symbol}_model.pth")
-        scaler_path = os.path.join(CONFIG['MODEL_CACHE_DIR'], f"{symbol}_scaler.pkl")
-        sentiment_path = os.path.join(CONFIG['MODEL_CACHE_DIR'], f"{symbol}_sentiment.pkl")
+        model_path = os.path.join(CONFIG['MODEL_CACHE_DIR'], f"{symbol}_model_{CONFIG['MODEL_VERSION']}.pth")
+        scaler_path = os.path.join(CONFIG['MODEL_CACHE_DIR'], f"{symbol}_scaler_{CONFIG['MODEL_VERSION']}.pkl")
+        sentiment_path = os.path.join(CONFIG['MODEL_CACHE_DIR'], f"{symbol}_news_sentiment_{CONFIG['MODEL_VERSION']}.pkl")
         
         # Save model state_dict (lightweight, compatible with load)
         torch.save({'model_state_dict': model.state_dict(), 'class_name': 'TradingModel'}, model_path)
@@ -808,9 +837,9 @@ def save_model_and_scaler(symbol: str, model: nn.Module, scaler: RobustScaler, s
         logger.error(f"Failed to save model and scaler for {symbol} to primary dir: {str(e)}. Attempting fallback save.")
         fallback_dir = './model_backup'
         os.makedirs(fallback_dir, exist_ok=True)
-        fallback_model_path = os.path.join(fallback_dir, f"{symbol}_model.pth")
-        fallback_scaler_path = os.path.join(fallback_dir, f"{symbol}_scaler.pkl")
-        fallback_sentiment_path = os.path.join(fallback_dir, f"{symbol}_sentiment.pkl")
+        fallback_model_path = os.path.join(fallback_dir, f"{symbol}_model_{CONFIG['MODEL_VERSION']}.pth")
+        fallback_scaler_path = os.path.join(fallback_dir, f"{symbol}_scaler_{CONFIG['MODEL_VERSION']}.pkl")
+        fallback_sentiment_path = os.path.join(fallback_dir, f"{symbol}_news_sentiment_{CONFIG['MODEL_VERSION']}.pkl")
         try:
             torch.save({'model_state_dict': model.state_dict(), 'class_name': 'TradingModel'}, fallback_model_path)
             with open(fallback_scaler_path, 'wb') as f:
@@ -1168,7 +1197,17 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
     dfs = {}
     stock_info = []
     total_epochs = len(CONFIG['SYMBOLS']) * CONFIG['TRAIN_EPOCHS']
-    need_training = any(load_model_and_scaler(symbol, expected_features, force_train)[0] is None for symbol in CONFIG['SYMBOLS'])
+    models = {}
+    scalers = {}
+    training_sentiments = {}
+    need_training = False
+    for symbol in CONFIG['SYMBOLS']:
+        model, scaler, sentiment = load_model_and_scaler(symbol, expected_features, force_train)
+        models[symbol] = model
+        scalers[symbol] = scaler
+        training_sentiments[symbol] = sentiment
+        if model is None:
+            need_training = True
     progress_bar = tqdm(total=total_epochs, desc="Training Progress", bar_format="{l_bar}\033[32m{bar}\033[0m{r_bar}") if need_training else None
 
     if not backtest_only:
@@ -1561,7 +1600,7 @@ Portfolio Value: ${portfolio_value:.2f}
             dfs_backtest[symbol]['Future_Direction'] = (dfs_backtest[symbol]['close'].shift(-CONFIG['LOOK_AHEAD_BARS']) > dfs_backtest[symbol]['close']).astype(int)
 
         attempt_results = []
-        if CONFIG['ENABLE_RETRAIN_CYCLE']:
+        if CONFIG['ENABLE_RETRAIN_CYCLE'] and force_train:
             effective_max = CONFIG['MAX_RETRAIN_ATTEMPTS']
         else:
             effective_max = 1
@@ -1577,11 +1616,12 @@ Portfolio Value: ${portfolio_value:.2f}
             sentiments = {}
             training_times_dictionary = {}
             if 'progress_bar' in locals():
-                progress_bar.close()  # Close if exists from previous iteration
+                if progress_bar is not None:
+                    progress_bar.close()  # Close if exists from previous iteration
                 progress_bar = None
 
             # If force_train, delete existing model and scaler files to force retraining
-            if force_train or retrain_attempts > 1 or CONFIG['ENABLE_RETRAIN_CYCLE']:
+            if force_train or retrain_attempts > 1:
                 for symbol in CONFIG['SYMBOLS']:
                     model_path = os.path.join(CONFIG['MODEL_CACHE_DIR'], f"{symbol}_model_{CONFIG['MODEL_VERSION']}.pth")
                     scaler_path = os.path.join(CONFIG['MODEL_CACHE_DIR'], f"{symbol}_scaler_{CONFIG['MODEL_VERSION']}.pkl")
@@ -1592,7 +1632,7 @@ Portfolio Value: ${portfolio_value:.2f}
                         os.remove(scaler_path)
                         logger.info(f"Deleted existing scaler for {symbol} to force retrain.")
 
-            need_training = any(load_model_and_scaler(symbol, expected_features, force_train or retrain_attempts > 1 or CONFIG['ENABLE_RETRAIN_CYCLE'])[0] is None for symbol in CONFIG['SYMBOLS'])
+            need_training = any(load_model_and_scaler(symbol, expected_features, force_train or retrain_attempts > 1)[0] is None for symbol in CONFIG['SYMBOLS'])
             progress_bar = tqdm(total=total_epochs, desc="Training Progress", bar_format="{l_bar}\033[32m{bar}\033[0m{r_bar}") if need_training else None
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -1601,8 +1641,8 @@ Portfolio Value: ${portfolio_value:.2f}
             mp.set_start_method('spawn', force=True)  # For CUDA compatibility in multiprocessing
             start_total_training_time = time.perf_counter()
             with mp.Pool(processes=CONFIG['NUM_PARALLEL_WORKERS']) as pool:
-                outputs = list(tqdm(pool.imap(train_wrapper, [(sym, expected_features, force_train or retrain_attempts > 1 or CONFIG['ENABLE_RETRAIN_CYCLE']) for sym in CONFIG['SYMBOLS']]),
-                                    total=len(CONFIG['SYMBOLS']), desc="Processing symbols"))
+                outputs = list(tqdm(pool.imap(train_wrapper, [(sym, expected_features, force_train or retrain_attempts > 1) for sym in CONFIG['SYMBOLS']]),
+                                                    total=len(CONFIG['SYMBOLS']), desc="Processing symbols"))
                 # No per-symbol cuda.empty_cache() needed; clear after all if required
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
