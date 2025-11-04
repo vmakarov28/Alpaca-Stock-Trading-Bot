@@ -1,6 +1,6 @@
 
 # +------------------------------------------------------------------------------+
-# |                            Alpaca Neural Bot v9.3.9                          |
+# |                            Alpaca Neural Bot v9.4                            |
 # +------------------------------------------------------------------------------+
 # | Author: Vladimir Makarov                                                     |
 # | Project Start Date: May 9, 2025                                              |
@@ -43,6 +43,8 @@ import multiprocessing as mp  # For parallel processing, like training models ac
 import time  # For time-related functions, like sleeping or timing operations (duplicate import)
 import shutil # File transfer
 import tempfile  # Add this import at the top of the file if not already present
+from alpaca.trading.requests import GetOrdersRequest
+from alpaca.trading.enums import QueryOrderStatus
 
 # Suppress PyTorch warnings
 warnings.filterwarnings('ignore', category=UserWarning)
@@ -1371,9 +1373,25 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
                         position_obj = next((pos for pos in open_positions if pos.symbol == symbol), None)
                         if position_obj:
                             qty_owned = int(float(position_obj.qty))
-                            entry_time = pd.Timestamp(position_obj.updated_at) if hasattr(position_obj, 'updated_at') else now  # Use updated_at for accuracy
+                            # Fetch entry time from the latest filled BUY order
+                            order_req = GetOrdersRequest(
+                                status=QueryOrderStatus.FILLED,
+                                symbols=[symbol],
+                                side=OrderSide.BUY,
+                                limit=50  # Limit to recent orders to avoid large responses
+                            )
+                            try:
+                                orders = trading_client.get_orders(order_req)
+                                if orders:
+                                    latest_order = max(orders, key=lambda o: o.filled_at if o.filled_at else datetime.min)
+                                    entry_time = latest_order.filled_at if latest_order.filled_at else now
+                                else:
+                                    entry_time = now  # Fallback if no orders found
+                            except Exception as e:
+                                logger.warning(f"Failed to fetch orders for {symbol} entry time: {str(e)}. Using current time as fallback.")
+                                entry_time = now
                             entry_price = float(position_obj.avg_entry_price)
-                            time_held = (now - entry_time).total_seconds() / 60
+                            time_held = (now - entry_time).total_seconds() / 60 if entry_time else 0
 
                         if current_volatility > CONFIG['MAX_VOLATILITY'] or current_adx < CONFIG['ADX_TREND_THRESHOLD']:
                             decision = "Hold (Filters)"
