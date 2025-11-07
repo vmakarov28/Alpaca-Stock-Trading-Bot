@@ -1,11 +1,11 @@
 
 # +------------------------------------------------------------------------------+
-# |                            Alpaca Neural Bot v9.4                            |
+# |                            Alpaca Neural Bot v9.4.1                          |
 # +------------------------------------------------------------------------------+
 # | Author: Vladimir Makarov                                                     |
 # | Project Start Date: May 9, 2025                                              |
 # | License: GNU Lesser General Public License v2.1                              |
-# | Version: 9.4 (Un-Released)                                                 |
+# | Version: 9.3.9 (Un-Released)                                                 |
 # +------------------------------------------------------------------------------+
 
 import os  # For operating system interactions, like creating directories and handling file paths
@@ -44,7 +44,9 @@ import time  # For time-related functions, like sleeping or timing operations (d
 import shutil # File transfer
 import tempfile  # Add this import at the top of the file if not already present
 from alpaca.trading.requests import GetOrdersRequest
+from alpaca.trading.enums import OrderSide, TimeInForce
 from alpaca.trading.enums import QueryOrderStatus
+from alpaca.trading.enums import OrderStatus
 
 # Suppress PyTorch warnings
 warnings.filterwarnings('ignore', category=UserWarning)
@@ -138,7 +140,7 @@ CONFIG = {
 }
 
 #pyenv activate pytorch_env
-#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.3.8.py --backtest --force-train
+#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.4.py --backtest --force-train
 
 
 def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -1375,22 +1377,28 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
                             qty_owned = int(float(position_obj.qty))
                             # Fetch entry time from the latest filled BUY order
                             order_req = GetOrdersRequest(
-                                status=QueryOrderStatus.FILLED,
+                                status=QueryOrderStatus.CLOSED,
                                 symbols=[symbol],
                                 side=OrderSide.BUY,
                                 limit=50  # Limit to recent orders to avoid large responses
                             )
                             try:
                                 orders = trading_client.get_orders(order_req)
-                                if orders:
-                                    latest_order = max(orders, key=lambda o: o.filled_at if o.filled_at else datetime.min)
+                                filled_buy_orders = [o for o in orders if o.status == OrderStatus.FILLED and o.side == OrderSide.BUY]
+                                if filled_buy_orders:
+                                    latest_order = max(filled_buy_orders, key=lambda o: o.filled_at if o.filled_at else datetime.min.replace(tzinfo=timezone.utc))
                                     entry_time = latest_order.filled_at if latest_order.filled_at else now
                                 else:
-                                    entry_time = now  # Fallback if no orders found
+                                    entry_time = now  # Fallback if no filled buy orders found
                             except Exception as e:
                                 logger.warning(f"Failed to fetch orders for {symbol} entry time: {str(e)}. Using current time as fallback.")
                                 entry_time = now
                             entry_price = float(position_obj.avg_entry_price)
+                            if entry_time:
+                                if entry_time.tzinfo is None:
+                                    entry_time = entry_time.replace(tzinfo=timezone.utc)
+                                else:
+                                    entry_time = entry_time.astimezone(timezone.utc)
                             time_held = (now - entry_time).total_seconds() / 60 if entry_time else 0
 
                         if current_volatility > CONFIG['MAX_VOLATILITY'] or current_adx < CONFIG['ADX_TREND_THRESHOLD']:
