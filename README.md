@@ -3,8 +3,6 @@
 Alpaca Neural Bot v10.0.0 is an advanced AI-powered stock trading bot that uses a CNN-LSTM neural network built with PyTorch to predict market trends and execute trades via the Alpaca API, optimized for GPU acceleration on NVIDIA RTX 5080. It incorporates technical indicators from TA-Lib (such as RSI, MACD, ATR, and ADX), sentiment analysis via Hugging Face Transformers, and robust risk management features including ATR-based stops, trailing stops, drawdown limits, volatility filters, and minimum holding periods. The bot supports comprehensive backtesting with metrics like Sharpe ratio, max drawdown, Monte Carlo simulations, and buy-and-hold benchmarks on historical data from 2015 to the current date (November 08, 2025), alongside live paper trading with email notifications and multiprocessing for efficient training across multiple symbols.
 
 ## Key capabilities
-
-## Key capabilities
 - **Neural Network Prediction:** Employs a CNN-LSTM model (Conv1D layers followed by LSTM) to predict future price directions over LOOK_AHEAD_BARS (7 bars) based on 30-timestep sequences of 23 features from historical and real-time data.
 
 - Model Training: Trains the CNN-LSTM model per symbol using Adam optimizer (learning rate 0.001), BCEWithLogitsLoss, early stopping, and ReduceLROnPlateau scheduler (patience 5, factor 0.5) over customizable epochs with customizable batch size; supports data augmentation via noise addition; in backtest mode, enables an automated retraining cycle (up to X attempts) that retrains until performance criteria are met, then selects and copies the best attempt's models/scalers.
