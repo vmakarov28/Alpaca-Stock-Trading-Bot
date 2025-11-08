@@ -24,6 +24,7 @@ Disclaimer: ***It is HIGHLY recommened to use this for educational purposes only
 
 # Installation Steps
 Follow these steps in order to set up the environment. 
+
 *Note: All commands after step 2 are for WSL/Ubuntu terminal.*
 
 ## Prerequisites
