@@ -1,16 +1,17 @@
 # Alpaca Stock Trading Bot
 
-Alpaca Neural Bot v6.7 is an advanced AI-powered stock trading bot that leverages neural networks to predict market trends and execute trades via the Alpaca API. Built with PyTorch for GPU acceleration (optimized for NVIDIA RTX 5080), it incorporates technical indicators (via TA-Lib), and risk management features like trailing stops, drawdown limits, and volatility filters. The bot supports both backtesting on historical data (from 2015 to the current date) and live paper trading.
+Alpaca Neural Bot v10.0.0 is an advanced AI-powered stock trading bot that uses a CNN-LSTM neural network built with PyTorch to predict market trends and execute trades via the Alpaca API, optimized for GPU acceleration on NVIDIA RTX 5080. It incorporates technical indicators from TA-Lib (such as RSI, MACD, ATR, and ADX), sentiment analysis via Hugging Face Transformers, and robust risk management features including ATR-based stops, trailing stops, drawdown limits, volatility filters, and minimum holding periods. The bot supports comprehensive backtesting with metrics like Sharpe ratio, max drawdown, Monte Carlo simulations, and buy-and-hold benchmarks on historical data from 2015 to the current date (November 08, 2025), alongside live paper trading with email notifications and multiprocessing for efficient training across multiple symbols.
 
 ## Key capabilities
 
-Neural Network Prediction: Uses a Conv1D + LSTM model to generate buy/sell signals based on historical and real-time data.
-Sentiment Analysis: Integrates DistilBERT for news sentiment scoring.
-Backtesting: Simulates trades with transaction costs, ATR-based stops, and performance metrics (Sharpe ratio, max drawdown).
-Live Trading: Executes market orders during open hours, with email notifications for trades and summaries.
-Multi-Symbol Support: Trades multiple stocks (e.g., SPY, MSFT, AAPL) in parallel using multiprocessing.
-GPU Acceleration: Fully utilizes CUDA for faster training on RTX 5080.
-Free Tier Compatible: Designed for Alpaca's free API tier, with retry logic for rate limits.
+## Key capabilities
+**Neural Network Prediction:** Employs a CNN-LSTM model (Conv1D layers followed by LSTM) to predict future price directions over LOOK_AHEAD_BARS (7 bars) based on 30-timestep sequences of 23 features from historical and real-time data.
+**Sentiment Analysis:** Has a framework to utilizes DistilBERT (distilbert-base-uncased-finetuned-sst-2-english) via Hugging Face Transformers for news sentiment scoring, currently set to netural
+**Backtesting:** Simulates trades across multiple symbols with transaction costs, ATR-based stops/profits, min holding periods, performance metrics (Sharpe ratio, max drawdown, win rates, accuracies), Monte Carlo simulations (50,000 runs), buy-and-hold benchmarks, and automated retraining cycles (up to 25 attempts) until criteria like min final value ($130,000) and max drawdown (35%) are met.
+**Live Trading:** Executes market orders during open market hours with email notifications for individual trades and daily summaries, incorporating RSI/ADX/volatility filters, trailing stops (5%), max drawdown limits (4%), and risk percentage per trade (6%).
+**Multi-Symbol Support:** Handles trading for multiple stocks (e.g., SPY, MSFT, AAPL, AMZN, NVDA, META, GOOGL) with parallel multiprocessing (4 workers) for model training and independent backtesting per symbol.
+**GPU Acceleration:** Leverages PyTorch with CUDA for accelerated training and inference on RTX 5080, including memory management via torch.cuda.empty_cache() after parallel sessions.
+**Free Tier Compatible:** Optimized for Alpaca's free API tier with retry logic (3 attempts, 1-second delay), data caching (24-hour expiry), and rate-limit handling via tenacity.
 
 ***This bot is for educational and testing purposes only. Use paper trading to avoid financial risk.***
 
