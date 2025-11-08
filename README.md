@@ -46,14 +46,14 @@ wsl --set-default-version 2
 sudo apt update && sudo apt upgrade -y
 ```
 
-Restart your PC if prompted.
+Restart your PC after successful installation.
 
 ### Troubleshooting:
 - If WSL installation fails, enable "Virtual Machine Platform" in Windows Features (Control Panel > Programs > Turn Windows features on/off).
 - Check WSL version: wsl --list --verbose. Ensure Ubuntu is on version 2.
 
 ## Step 2: Install pyenv for Python Management
-*************From now on the rest of the steps will be completed in wsl*************
+*********\*\***From now on the rest of the steps will be completed in wsl*\*\***********
 
 Pyenv allows isolated Python environments.
 
