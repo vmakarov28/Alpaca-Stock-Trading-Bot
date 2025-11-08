@@ -15,7 +15,7 @@ Alpaca Neural Bot v10.0.0 is an advanced AI-powered stock trading bot that uses 
 
 - **GPU Acceleration:** Leverages PyTorch with CUDA for accelerated training and inference on RTX 5080, including memory management via torch.cuda.empty_cache() after parallel sessions.
 
-- **Sentiment Analysis:** Has a framework to utilizes DistilBERT (distilbert-base-uncased-finetuned-sst-2-english) via Hugging Face Transformers for news sentiment scoring, currently defualts to netural
+- **Sentiment Analysis:** Has a framework to utilizes DistilBERT (distilbert-base-uncased-finetuned-sst-2-english) via Hugging Face Transformers for news sentiment scoring, currently defaults to netural. (A simulated place holder)
 
 - **Free Tier Compatible:** Optimized for Alpaca's free API tier with retry logic (3 attempts, 1-second delay), data caching (24-hour expiry), and rate-limit handling via tenacity.
 
@@ -23,12 +23,12 @@ Alpaca Neural Bot v10.0.0 is an advanced AI-powered stock trading bot that uses 
 
 
 # Installation Steps
-Follow these steps in order to set up the environment. *Note: All commands after steo 2 are for WSL/Ubuntu terminal.*
+Follow these steps in order to set up the environment. *Note: All commands after step 2 are for WSL/Ubuntu terminal.*
 
 ## Prerequisites
 
 - Drivers: Install the latest nvidia drivers from nvdia app along with Cuda 12.8 and cuDNN.
-- Hardware: NVIDIA GPU with at least 16GB VRAM for efficient training. (Confirmed to work propperly on RTX 5080 but other 50 series and 40 series card are likley to work).
+- Hardware: NVIDIA GPU with at least 16GB VRAM for efficient training. (Confirmed to work properly on RTX 5080 but other 50 series and 40 series card are likely to work).
 - Operating System: Windows Subsystem for Linux (WSL2) on Windows 10/11, or native Ubuntu 22.04+.
 - Alpaca Account: Free account with paper trading enabled. Get API keys from Alpaca Dashboard.
 - Gmail Account: For email notifications (enable "Less secure app access" or use app password).
@@ -308,6 +308,6 @@ GNU Lesser General Public License v2.1. See LICENSE for details.
 
 Author: Vladimir Makarov
 
-Most reacent change: 11/08/25
+Most recent change: 11/08/25
 
 GitHub: vmakarov28/Alpaca-Stock-Trading-Bot
