@@ -7,7 +7,9 @@ Alpaca Neural Bot v10.0.0 is an advanced AI-powered stock trading bot that uses 
 ## Key capabilities
 - **Neural Network Prediction:** Employs a CNN-LSTM model (Conv1D layers followed by LSTM) to predict future price directions over LOOK_AHEAD_BARS (7 bars) based on 30-timestep sequences of 23 features from historical and real-time data.
 
-- **Backtesting:** Simulates trades across multiple symbols with transaction costs, ATR-based stops/profits, min holding periods, performance metrics (Sharpe ratio, max drawdown, win rates, accuracies), Monte Carlo simulations (50,000 runs), buy-and-hold benchmarks, and automated retraining cycles (up to 25 attempts) until criteria like min final value ($130,000) and max drawdown (35%) are met.
+- Model Training: Trains the CNN-LSTM model per symbol using Adam optimizer (learning rate 0.001), BCEWithLogitsLoss, early stopping, and ReduceLROnPlateau scheduler (patience 5, factor 0.5) over customizable epochs with customizable batch size; supports data augmentation via noise addition; in backtest mode, enables an automated retraining cycle (up to X attempts) that retrains until performance criteria are met, then selects and copies the best attempt's models/scalers.
+
+- **Backtesting:** Simulates trades across multiple symbols between a specifyable data, and today. Includes transaction costs, ATR-based stops/profits, min holding periods, performance metrics (Sharpe ratio, max drawdown, win rates, accuracies), Monte Carlo simulations (50,000 runs), buy-and-hold benchmarks. 
 
 - **Live Trading:** Executes market orders during open market hours with email notifications for individual trades and daily summaries, incorporating RSI/ADX/volatility filters, trailing stops (5%), max drawdown limits (4%), and risk percentage per trade (6%).
 
