@@ -1,157 +1,34 @@
 # Alpaca Stock Trading Bot
 
-Alpaca Neural Bot v6.7 is an advanced AI-powered stock trading bot that leverages neural networks to predict market trends and execute trades via the Alpaca API. Built with PyTorch for GPU acceleration (optimized for NVIDIA RTX 5080), it incorporates technical indicators (via TA-Lib), and risk management features like trailing stops, drawdown limits, and volatility filters. The bot supports both backtesting on historical data (from 2015 to the current date) and live paper trading.
+Alpaca Neural Bot v10.0.0 is an advanced AI-powered stock trading bot that uses a CNN-LSTM neural network built with PyTorch to predict market trends and execute trades via the Alpaca API, optimized for GPU acceleration on NVIDIA RTX 5080. It incorporates technical indicators from TA-Lib (such as RSI, MACD, ATR, and ADX), sentiment analysis via Hugging Face Transformers, and robust risk management features including ATR-based stops, trailing stops, drawdown limits, volatility filters, and minimum holding periods. The bot supports comprehensive backtesting with metrics like Sharpe ratio, max drawdown, Monte Carlo simulations, and buy-and-hold benchmarks on historical data from 2015 to the current date (November 08, 2025), alongside live paper trading with email notifications and multiprocessing for efficient training across multiple symbols.
 
 ## Key capabilities
+- **Neural Network Prediction:** Employs a CNN-LSTM model (Conv1D layers followed by LSTM) to predict future price directions over LOOK_AHEAD_BARS (7 bars) based on 30-timestep sequences of 23 features from historical and real-time data.
 
-Neural Network Prediction: Uses a Conv1D + LSTM model to generate buy/sell signals based on historical and real-time data.
-Sentiment Analysis: Integrates DistilBERT for news sentiment scoring.
-Backtesting: Simulates trades with transaction costs, ATR-based stops, and performance metrics (Sharpe ratio, max drawdown).
-Live Trading: Executes market orders during open hours, with email notifications for trades and summaries.
-Multi-Symbol Support: Trades multiple stocks (e.g., SPY, MSFT, AAPL) in parallel using multiprocessing.
-GPU Acceleration: Fully utilizes CUDA for faster training on RTX 5080.
-Free Tier Compatible: Designed for Alpaca's free API tier, with retry logic for rate limits.
+- Model Training: Trains the CNN-LSTM model per symbol using Adam optimizer (learning rate 0.001), BCEWithLogitsLoss, early stopping, and ReduceLROnPlateau scheduler (patience 5, factor 0.5) over customizable epochs with customizable batch size; supports data augmentation via noise addition; in backtest mode, enables an automated retraining cycle (up to X attempts) that retrains until performance criteria are met, then selects and copies the best attempt's models/scalers.
+
+- **Backtesting:** Simulates trades across multiple symbols between a specifyable data, and today. Includes transaction costs, ATR-based stops/profits, min holding periods, performance metrics (Sharpe ratio, max drawdown, win rates, accuracies), Monte Carlo simulations (50,000 runs), buy-and-hold benchmarks. 
+
+- **Live Trading:** Executes market orders during open market hours with email notifications for individual trades and daily summaries.
+
+- **Multi-Symbol Support:** Handles trading for multiple stocks (e.g., SPY, MSFT, AAPL, AMZN, NVDA, META, GOOGL) with parallel multiprocessing (4 workers) for model training and independent backtesting per symbol.
+
+- **GPU Acceleration:** Leverages PyTorch with CUDA for accelerated training and inference on RTX 5080, including memory management via torch.cuda.empty_cache() after parallel sessions.
+
+- **Sentiment Analysis:** Has a framework to utilizes DistilBERT (distilbert-base-uncased-finetuned-sst-2-english) via Hugging Face Transformers for news sentiment scoring, currently defualts to netural
+
+- **Free Tier Compatible:** Optimized for Alpaca's free API tier with retry logic (3 attempts, 1-second delay), data caching (24-hour expiry), and rate-limit handling via tenacity.
 
 ***This bot is for educational and testing purposes only. Use paper trading to avoid financial risk.***
 
-## Features
-
-Data Fetching: Retrieves 15-minute bars from Alpaca API, cached for efficiency.
-Indicators: Calculates RSI, MACD, ATR, ADX, Volatility, BBands, Stoch, and more using TA-Lib.
-Model Training: Trains per-symbol models with early stopping, data augmentation (noise), and Xavier initialization.
-Risk Management: Enforces max drawdown, position sizing based on ATR/risk percentage, trailing stops.
-Notifications: Sends email updates for trades, failures, and summaries via Gmail SMTP.
-Backtest Mode: Computes total return, Sharpe ratio, max drawdown, win rate per symbol.
-Live Mode: Runs every 15 minutes during market hours, with countdown timer.
-Force Train: Option to retrain models instead of using cache.
-Error Handling: Retries API calls, validates data, logs trades.
-
-
-
-
-
-
-# How it Works
-## Chronological Order of Usage in Backtest Mode
-This traces the execution flow starting from program start (argparse in name == "main"), assuming force_train=False (models may load from cache) and general conditions (e.g., some training needed, valid data). Calls are listed in the order they are first invoked during execution; repeated calls (e.g., per-symbol) are noted with multiplicity. Unused definitions are not listed here.
-
-**1. main**
-       - Serves as the entry point, parsing command-line arguments and orchestrating the bot's execution in backtest or live mode by calling setup functions, training or loading models per symbol, and running backtests or live trading loops.
-
-**2. get_api_keys**
-       - Validates Alpaca API keys in CONFIG and prompts the user for input if they are missing or invalid, ensuring secure API access.
-
-**3. check_dependencies**
-       - Verifies the presence of required Python modules by attempting imports, raising an ImportError if any are missing to prevent runtime failures.
-
-**4. validate_config**
-       - Checks CONFIG parameters for correctness, such as non-empty symbols and positive integers for epochs, raising ValueErrors for invalid settings to ensure proper configuration.
-
-**5. create_cache_directory**
-       - Creates the cache directory specified in CONFIG if it doesn't exist, using os.makedirs with exist_ok=True for data storage.
-
-**6. load_model_and_scaler**
-       - Loads a trained model, scaler, and sentiment from cache files for a symbol if available and not forcing retrain; otherwise, returns None to trigger training, handling legacy model compatibility by reloading state into the current class.
-
-       
-**7. train_symbol**
-       - Processes a single symbol by loading or fetching data and sentiment, calculating indicators, preprocessing sequences, training or loading the model, and saving artifacts if trained, returning processed items for multiprocessing-like sequential handling.
-
-- load_or_fetch_data (Loads historical stock data from cache if recent, otherwise fetches it via API and caches it, ensuring minimum data points for the symbol)
-
-- fetch_data (Retrieves historical bars from Alpaca API in yearly increments, handling symbol changes like META to FB, concatenating results, and validating sufficient data)
-
-- load_news_sentiment (Loads cached sentiment score for a symbol if valid, otherwise generates a random value for testing and caches it)
-
-- calculate_indicators (Adds technical indicators like RSI, MACD, ATR, and sentiment to the DataFrame using TA-Lib, computes future direction targets, and drops incomplete rows)
-
-- preprocess_data (Scales features using RobustScaler (fitting in training mode), creates sliding window sequences for LSTM input, adds noise during training, and aligns binary future direction targets)
-
-- train_model (Builds and trains an LSTM model on sequences using BCE loss, Adam optimizer, early stopping on validation loss, and saves the best model and scaler)
-
-- TradingModel (Defines an LSTM-based neural network with dropout and ReLU layers for predicting stock direction from time-series features, processing sequences to output logits)
-
-- save_model_and_scaler (Saves the model's state dict, scaler, and sentiment to cache files using torch.save and pickle for future loading)
-
-
-**12. backtest**
-       - Simulates trading for a symbol using model predictions on historical data, applying buy/sell rules with filters like RSI/ADX/volatility, risk management via ATR stops, and tracking returns, trades, and win rate.
-
-- preprocess_data (Scales recent data without fitting, creates sequences for prediction without targets or noise)
-
-- TradingModel (Performs forward passes on batched sequences to generate sigmoid probabilities for trading signals)
-
-**13. calculate_performance_metrics**
-       - Computes total return, Sharpe ratio, and max drawdown from trade returns, using numpy for means, std, and cumulative products.
-
-**14. format_email_body**
-       - Constructs a string with backtest summary including initial/final values, total return, and per-symbol metrics, trades, and win rates for email content.
-
-**15. send_email**
-       - Sends an email with the given subject and body using SMTP, logging in with CONFIG credentials and MIMEText for formatting.
-
-
-Execution ends after logging final value.
-
-## Chronological Order of Usage in Live Trading Mode (--backtest False)
-Similar start to backtest, but diverges after training/loading. Assumes market open/closed cycles, valid data, and some trades triggered. Infinite loop, so order repeats per cycle. First invocation order listed; repeats noted.
-
-main (entry point: parses args, calls main with backtest_only=False).
-get_api_keys (validates/prompts for keys).
-check_dependencies (verifies imports).
-validate_config (checks CONFIG values).
-create_cache_directory (makes cache dir).
-load_model_and_scaler (called multiple times: once per symbol in any() to check need_training).
-train_symbol (called once per symbol in loop).
-
-Within train_symbol:
-
-load_or_fetch_data (loads/fetches data).
-
-fetch_data (if no cache: fetches bars).
-
-
-load_news_sentiment (loads/computes sentiment).
-load_model_and_scaler (loads if exists).
-calculate_indicators (adds indicators to DF).
-preprocess_data (if training needed: creates sequences with noise).
-train_model (if training needed: trains model).
-
-TradingModel (instantiated in train_model).
-
-
-save_model_and_scaler (if trained: saves artifacts).
-
-
-
-
-fetch_recent_data (in live loop: once per symbol per 15min cycle if market open).
-calculate_indicators (once per symbol per cycle: adds to recent DF).
-preprocess_data (once per symbol per cycle: inference mode for recent data).
-TradingModel (used via loaded model for forward pass on recent sequence per symbol per cycle).
-send_email (multiple: per trade if buy/sell, plus once per cycle for summary; also if drawdown exceeded).
-
-Execution continues in infinite loop (no natural end unless drawdown pause or manual stop). If market closed, sleeps with timer (no function calls).
-
-
-
-
-
-
-
-
-
-
-
-
 
 # Installation Steps
-Follow these steps in order to set up the environment. All commands after steo 2 are for WSL/Ubuntu terminal.
+Follow these steps in order to set up the environment. *Note: All commands after steo 2 are for WSL/Ubuntu terminal.*
 
 ## Prerequisites
 
 - Drivers: Install the latest nvidia drivers from nvdia app along with Cuda 12.8 and cuDNN.
-- Hardware: NVIDIA GPU (Confirmed to work propperly on RTX 5080 but other 50 series and 40 series card are likley to work). At least 16GB VRAM for efficient training.
+- Hardware: NVIDIA GPU with at least 16GB VRAM for efficient training. (Confirmed to work propperly on RTX 5080 but other 50 series and 40 series card are likley to work).
 - Operating System: Windows Subsystem for Linux (WSL2) on Windows 10/11, or native Ubuntu 22.04+.
 - Alpaca Account: Free account with paper trading enabled. Get API keys from Alpaca Dashboard.
 - Gmail Account: For email notifications (enable "Less secure app access" or use app password).
@@ -162,21 +39,21 @@ Follow these steps in order to set up the environment. All commands after steo 2
 ### Step 1: Set Up WSL (Windows Users Only)
 
 If you're on Windows, enable WSL2 for Linux-based setup. Open PowerShell as Administrator and install Windows Subsystem for Linux:
-'''
+```
 wsl --install
 wsl --install -d Ubuntu
 wsl --set-default-version 2
 sudo apt update && sudo apt upgrade -y
-'''
+```
 
-Restart your PC if prompted.
+Restart your PC after successful installation.
 
 ### Troubleshooting:
 - If WSL installation fails, enable "Virtual Machine Platform" in Windows Features (Control Panel > Programs > Turn Windows features on/off).
 - Check WSL version: wsl --list --verbose. Ensure Ubuntu is on version 2.
 
 ## Step 2: Install pyenv for Python Management
-*************From now on the rest of the steps will be completed in wsl*************
+*********\*\***From now on the rest of the steps will be completed in wsl*\*\***********
 
 Pyenv allows isolated Python environments.
 
@@ -194,14 +71,14 @@ Add to shell profile (add to ~/.bashrc or ~/.zshrc). Open the file with the nano
 
     nano ~/.bashrc
     
-Then add the new paths to the file.
+Then add the new paths to the end of the file.
 > export PATH="$HOME/.pyenv/bin:$PATH"
 > 
 > eval "$(pyenv init --path)"
 > 
 > eval "$(pyenv virtualenv-init -)"
 > 
-Press Cntrl + O then Enter to save and Cntrl + X to exit the file.
+Press `Cntrl + O` then `Enter` to save. Then use `Cntrl + X` to exit the file.
 Now back in the command line refresh the file with:
 
     source ~/.bashrc
@@ -431,6 +308,6 @@ GNU Lesser General Public License v2.1. See LICENSE for details.
 
 Author: Vladimir Makarov
 
-Most reacent change: 10/28/25
+Most reacent change: 11/08/25
 
 GitHub: vmakarov28/Alpaca-Stock-Trading-Bot
