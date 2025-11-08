@@ -28,7 +28,7 @@ Follow these steps in order to set up the environment. *Note: All commands after
 ## Prerequisites
 
 - Drivers: Install the latest nvidia drivers from nvdia app along with Cuda 12.8 and cuDNN.
-- Hardware: NVIDIA GPU (Confirmed to work propperly on RTX 5080 but other 50 series and 40 series card are likley to work). At least 16GB VRAM for efficient training.
+- Hardware: NVIDIA GPU with at least 16GB VRAM for efficient training. (Confirmed to work propperly on RTX 5080 but other 50 series and 40 series card are likley to work).
 - Operating System: Windows Subsystem for Linux (WSL2) on Windows 10/11, or native Ubuntu 22.04+.
 - Alpaca Account: Free account with paper trading enabled. Get API keys from Alpaca Dashboard.
 - Gmail Account: For email notifications (enable "Less secure app access" or use app password).
@@ -39,12 +39,16 @@ Follow these steps in order to set up the environment. *Note: All commands after
 ### Step 1: Set Up WSL (Windows Users Only)
 
 If you're on Windows, enable WSL2 for Linux-based setup. Open PowerShell as Administrator and install Windows Subsystem for Linux:
-'''
+```
 wsl --install
+
 wsl --install -d Ubuntu
+
 wsl --set-default-version 2
+
 sudo apt update && sudo apt upgrade -y
-'''
+
+```
 
 Restart your PC if prompted.
 
