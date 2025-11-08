@@ -19,7 +19,7 @@ Alpaca Neural Bot v10.0.0 is an advanced AI-powered stock trading bot that uses 
 
 - **Free Tier Compatible:** Optimized for Alpaca's free API tier with retry logic (3 attempts, 1-second delay), data caching (24-hour expiry), and rate-limit handling via tenacity.
 
-**\*It is HIGHLY recommened to use this for educational purposes only. Use paper trading to avoid real financial risk.*\**
+**\*It is HIGHLY recommened to use this for educational purposes only. Use paper trading to avoid real financial risk.**\**
 
 
 # Installation Steps
