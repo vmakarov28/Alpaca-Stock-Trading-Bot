@@ -1,6 +1,6 @@
 
 # +------------------------------------------------------------------------------+
-# |                            Alpaca Neural Bot v9.6.3                          |
+# |                            Alpaca Neural Bot v9.7.0                          |
 # +------------------------------------------------------------------------------+
 # | Author: Vladimir Makarov                                                     |
 # | Project Start Date: May 9, 2025                                              |
@@ -127,20 +127,20 @@ CONFIG = {
     # API Retry Settings - Configuration for handling API failures
     'API_RETRY_ATTEMPTS': 3,  # Number of retry attempts for API calls
     'API_RETRY_DELAY': 1000,  # Delay between retry attempts in milliseconds
-    'MODEL_VERSION': 'v935',  # Model architecture version; increment on structural changes to force retrain
+    'MODEL_VERSION': 'v935',  # Used to fetch correct version of model and scalars
 
     # New: Retraining Cycle Parameters
     'ENABLE_RETRAIN_CYCLE': True,  # Enable loop to retrain until criteria met (backtest mode only)
     'MIN_FINAL_VALUE': 130000.0,  # Minimum final portfolio value to accept
     'MAX_ALLOWED_DRAWDOWN': 35.0,  # Maximum allowed max_drawdown percentage (across symbols)
-    'MAX_RETRAIN_ATTEMPTS': 100,  # Max loop iterations to prevent infinite runs
+    'MAX_RETRAIN_ATTEMPTS': 25,  # Max loop iterations to prevent infinite runs
 
     #Monte Carlo Probability Simulation
     'NUM_MC_SIMULATIONS': 50000,  # Number of Monte Carlo simulations for backtest robustness testing
 }
 
 #pyenv activate pytorch_env
-#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.4.2.py --backtest --force-train
+#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.6.0.py --backtest --force-train
 
 
 def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -335,44 +335,46 @@ def fetch_recent_data(symbol: str, num_bars: int) -> pd.DataFrame:
 def fetch_data(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
     """Fetch historical bar data from Alpaca API in yearly increments."""
     try:
-        client = StockHistoricalDataClient(CONFIG['ALPACA_API_KEY'], CONFIG['ALPACA_SECRET_KEY'])
-        all_bars = []
-        current_start = pd.Timestamp(start_date, tz='UTC')
+        client = StockHistoricalDataClient(CONFIG['ALPACA_API_KEY'], CONFIG['ALPACA_SECRET_KEY'])  # Initialize client with keys
+        all_bars = []  # Collect data in chunks to bypass API limits on large ranges
+        current_start = pd.Timestamp(start_date, tz='UTC')  # Ensure UTC for consistency
         end_dt = pd.Timestamp(end_date, tz='UTC')
-        increment = pd.DateOffset(years=1)
-
+        increment = pd.DateOffset(years=1)  # Yearly chunks to avoid request timeouts/large responses
+        
         while current_start < end_dt:
             current_end = min(current_start + increment, end_dt)
             logger.info(f"Fetching data for {symbol} from {current_start} to {current_end}")
-            effective_symbol = 'FB' if symbol == 'META' and current_start < pd.Timestamp('2021-10-28', tz='UTC') else symbol
+            effective_symbol = 'FB' if symbol == 'META' and current_start < pd.Timestamp('2021-10-28', tz='UTC') else symbol  # Handle META ticker rename
             request = StockBarsRequest(
                 symbol_or_symbols=effective_symbol,
                 timeframe=CONFIG['TIMEFRAME'],
                 start=current_start,
                 end=current_end
             )
-            bars = client.get_stock_bars(request).df
+            bars = client.get_stock_bars(request).df  # Fetch bars as DataFrame
+            
             if not bars.empty:
-                df_bars = bars.reset_index().rename(columns={'vwap': 'VWAP'})
+                df_bars = bars.reset_index().rename(columns={'vwap': 'VWAP'})  # Rename for consistency
                 all_bars.append(df_bars)
                 logger.info(f"Fetched {len(df_bars)} bars for {symbol} from {df_bars['timestamp'].min()} to {df_bars['timestamp'].max()}")
             else:
-                logger.info(f"No data for {symbol} from {current_start} to {current_end}, skipping")
+                logger.info(f"No data for {symbol} from {current_start} to {current_end}, skipping")  # Handle gaps (e.g., non-trading periods)
             current_start = current_end
-
+        
         if all_bars:
-            df = pd.concat(all_bars).sort_values('timestamp')
-            df = df.drop_duplicates(subset='timestamp', keep='first')
+            df = pd.concat(all_bars).sort_values('timestamp')  # Combine and sort chronologically
+            df = df.drop_duplicates(subset='timestamp', keep='first')  # Remove any duplicate timestamps from overlaps
             logger.info(f"Total fetched {len(df)} bars for {symbol}")
         else:
-            df = pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'VWAP'])
-
+            df = pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'VWAP'])  # Empty df with schema if no data
+        
         if len(df) < CONFIG['MIN_DATA_POINTS']:
-            raise ValueError(f"Insufficient data for {symbol}: got {len(df)} bars, need {CONFIG['MIN_DATA_POINTS']}")
+            raise ValueError(f"Insufficient data for {symbol}: got {len(df)} bars, need {CONFIG['MIN_DATA_POINTS']}")  # Validate min size
         return df
+    
     except Exception as e:
         logger.error(f"Error fetching data for {symbol}: {str(e)}")
-        raise
+        raise  # Re-raise for caller handling
 
 # Loads from cache if fresh, else fetches full history to now, saves pickle, returns df and loaded flag.
 def load_or_fetch_data(symbol: str, start_date: str, end_date: str) -> Tuple[pd.DataFrame, bool]:
@@ -494,64 +496,65 @@ def validate_indicators(df: pd.DataFrame, symbol: str) -> None:
 
 def preprocess_data(df: pd.DataFrame, timesteps: int, add_noise: bool = False, inference_scaler: Optional[RobustScaler] = None, inference_mode: bool = False, fit_scaler: bool = True) -> Tuple[np.ndarray, Optional[np.ndarray], Optional[RobustScaler]]:
     """Preprocess data into sequences for future price direction prediction (next bar up/down).
-    
+   
     Args:
         inference_mode: If True, do not compute targets (y_seq); return None for y_seq.
         fit_scaler: If True, fit a new scaler; else, transform with inference_scaler (prevents leakage on val/test).
         inference_scaler: Existing scaler for transform when fit_scaler=False.
-    
+   
     Returns:
         X_seq: Scaled input sequences.
         y_seq: Targets (None in inference mode).
         scaler: Fitted scaler (None if fit_scaler=False).
     """
-    df = df.copy()
-    df.ffill(inplace=True)
-    df.fillna(0, inplace=True)
-    
+    df = df.copy()  # Avoid modifying original df
+    df.ffill(inplace=True)  # Forward fill missing values to handle sparse data
+    df.fillna(0, inplace=True)  # Backfill remaining with 0 (e.g., early indicators)
+   
     features = [
         'close', 'high', 'low', 'volume', 'MA20', 'MA50', 'RSI',
         'MACD', 'MACD_signal', 'OBV', 'VWAP', 'ATR', 'CMF', 'Close_ATR',
         'MA20_ATR', 'Return_1d', 'Return_5d', 'Volatility', 'BB_upper',
         'BB_lower', 'Stoch_K', 'Stoch_D', 'ADX', 'Sentiment'
-    ]
+    ]  # Fixed feature list; must match expected_features (24)
     if 'Future_Direction' not in df.columns and not inference_mode:
-        raise ValueError("Future_Direction column missing; required for training.")
-    X_raw = df[features].values
-    
+        raise ValueError("Future_Direction column missing; required for training.")  # Ensure targets present for train/val
+    X_raw = df[features].values  # Extract as numpy for scaling
+   
+    # Scale features; RobustScaler handles outliers in financial data
     if fit_scaler:
         scaler = RobustScaler()
-        X = scaler.fit_transform(X_raw)
+        X = scaler.fit_transform(X_raw)  # Fit and transform on train
     else:
         if inference_scaler is None:
             raise ValueError("inference_scaler must be provided when fit_scaler=False.")
-        X = inference_scaler.transform(X_raw)
+        X = inference_scaler.transform(X_raw)  # Transform only for val/test/live to prevent leakage
         scaler = None
-    
+   
     if not inference_mode:
         y = df['Future_Direction'].values
         y_seq = y
     else:
-        y_seq = None
-    
+        y_seq = None  # No targets needed for inference
+   
     if add_noise:
-        X += np.random.normal(0, 0.005, X.shape)
-    
+        X += np.random.normal(0, 0.005, X.shape)  # Add Gaussian noise for augmentation (regularization against overfitting)
+   
     N = X.shape[0]
     num_sequences = N - timesteps
     if num_sequences <= 0:
-        raise ValueError(f"Not enough data for {timesteps} timesteps: only {N} rows available")
-    
-    # Create sliding windows for past data to predict NEXT bar's direction
+        raise ValueError(f"Not enough data for {timesteps} timesteps: only {N} rows available")  # Check sufficient rows for windows
+   
+    # Create sliding windows for past data to predict NEXT bar's direction; uses stride tricks for efficiency
     window = np.lib.stride_tricks.sliding_window_view(X, (timesteps, X.shape[1]))
-    X_seq = window[:num_sequences].reshape(num_sequences, timesteps, X.shape[1])
-    
+    X_seq = window[:num_sequences].reshape(num_sequences, timesteps, X.shape[1])  # Shape: (samples, timesteps, features)
+   
     if not inference_mode:
-        y_seq = y[timesteps - 1: timesteps - 1 + num_sequences]  # Align target to end of each sequence
-        logger.info(f"Preprocessed {len(X_seq)} sequences; y balance: {np.mean(y_seq):.3f} (up fraction)")
+        y_seq = y[timesteps - 1: timesteps - 1 + num_sequences] # Align target to end of each sequence (predict next after window)
+        logger.info(f"Preprocessed {len(X_seq)} sequences; y balance: {np.mean(y_seq):.3f} (up fraction)")  # Log class balance for monitoring
     else:
         logger.info(f"Preprocessed {len(X_seq)} inference sequences")
-    
+   
     return X_seq, y_seq, scaler
 
 def monte_carlo_simulation(returns: List[float], initial_cash: float, num_simulations: int = CONFIG['NUM_MC_SIMULATIONS']) -> Dict[str, float]:
@@ -628,63 +631,63 @@ class TQDMCallback:
 
 def train_model(symbol: str, df: pd.DataFrame, epochs: int, batch_size: int, timesteps: int, expected_features: int) -> Tuple[nn.Module, Any]:
     """Train the CNN-LSTM model with early stopping and learning rate scheduling."""
+    # Set device for training; prefers CUDA for GPU acceleration to speed up computations
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = TradingModel(timesteps, expected_features).to(device)
     optimizer = optim.Adam(model.parameters(), lr=CONFIG['LEARNING_RATE'])
     # Compute pos_weight based on class balance (up fraction ~0.5, so weight positives slightly higher for confidence)
-    pos_weight = torch.tensor([1.1])  # Slight bias; adjust based on empirical balance (e.g., 1 / up_fraction if imbalanced)
-    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight.to(device))
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=CONFIG['LR_SCHEDULER_PATIENCE'], factor=CONFIG['LR_REDUCTION_FACTOR'])
+    pos_weight = torch.tensor([1.1]) # Slight bias; adjust based on empirical balance (e.g., 1 / up_fraction if imbalanced)
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight.to(device))  # BCE loss with logits for binary classification; pos_weight handles slight imbalance
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=CONFIG['LR_SCHEDULER_PATIENCE'], factor=CONFIG['LR_REDUCTION_FACTOR'])  # Reduces LR on plateau to improve convergence
     best_val_loss = float('inf')
     patience_counter = 0
-    # Chronological split: Assume df is sorted by timestamp
+    # Chronological split: Assume df is sorted by timestamp to maintain time series integrity and prevent lookahead bias
     df_train = df[df['timestamp'] <= pd.Timestamp(CONFIG['TRAIN_END_DATE'], tz='UTC')].copy()
     df_val = df[(df['timestamp'] > pd.Timestamp(CONFIG['TRAIN_END_DATE'], tz='UTC')) & (df['timestamp'] <= pd.Timestamp(CONFIG['VAL_END_DATE'], tz='UTC'))].copy()
     if len(df_train) < CONFIG['MIN_DATA_POINTS'] or len(df_val) < CONFIG['MIN_DATA_POINTS'] // 5:
-        raise ValueError(f"Insufficient data for {symbol}: train={len(df_train)}, val={len(df_val)}")
-    # Compute targets separately on subsets to prevent label leakage
+        raise ValueError(f"Insufficient data for {symbol}: train={len(df_train)}, val={len(df_val)}")  # Ensure enough data points to avoid underfitting or invalid splits
+    # Compute targets separately on subsets to prevent label leakage from future data
     df_train['Future_Direction'] = np.where(df_train['close'].shift(-CONFIG['LOOK_AHEAD_BARS']) > df_train['close'], 1, 0)
-    df_train = df_train.dropna(subset=['Future_Direction'])
+    df_train = df_train.dropna(subset=['Future_Direction'])  # Drop rows where target is NaN (e.g., end of data)
     df_val['Future_Direction'] = np.where(df_val['close'].shift(-CONFIG['LOOK_AHEAD_BARS']) > df_val['close'], 1, 0)
     df_val = df_val.dropna(subset=['Future_Direction'])
-    # Preprocess subsets separately to avoid label leakage
+    # Preprocess subsets separately to avoid label leakage; fit scaler on train only
     X_train, y_train, scaler = preprocess_data(df_train, timesteps, add_noise=True)
-    X_val, y_val, _ = preprocess_data(df_val, timesteps, inference_scaler=scaler, inference_mode=False)  # Use train scaler, but compute y for val
+    X_val, y_val, _ = preprocess_data(df_val, timesteps, inference_scaler=scaler, inference_mode=False) # Use train scaler, but compute y for val
     if X_train.shape[2] != expected_features or X_val.shape[2] != expected_features:
-        raise ValueError(f"Feature mismatch for {symbol}: expected {expected_features}, train got {X_train.shape[2]}, val got {X_val.shape[2]}")
+        raise ValueError(f"Feature mismatch for {symbol}: expected {expected_features}, train got {X_train.shape[2]}, val got {X_val.shape[2]}")  # Validate feature count after preprocessing
     train_dataset = TensorDataset(torch.FloatTensor(X_train), torch.FloatTensor(y_train))
     val_dataset = TensorDataset(torch.FloatTensor(X_val), torch.FloatTensor(y_val))
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)  # Shuffle train for better generalization
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)  # No shuffle for val to preserve order
     for epoch in range(epochs):
-        model.train()
+        model.train()  # Set model to training mode (enables dropout, etc.)
         train_loss = 0.0
         for batch_X, batch_y in train_loader:
-            batch_X, batch_y = batch_X.to(device), batch_y.to(device)
+            batch_X, batch_y = batch_X.to(device), batch_y.to(device)  # Move to device for GPU acceleration
             optimizer.zero_grad()
             outputs = model(batch_X)
             loss = criterion(outputs.squeeze(1), batch_y.float())
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
-        train_loss /= len(train_loader)
-        model.eval()
+        train_loss /= len(train_loader)  # Average loss per batch
+        model.eval()  # Set to eval mode (disables dropout)
         val_loss = 0.0
-        with torch.no_grad():
+        with torch.no_grad():  # Disable gradients for validation to save memory
             for batch_X, batch_y in val_loader:
                 batch_X, batch_y = batch_X.to(device), batch_y.to(device)
                 outputs = model(batch_X)
                 loss = criterion(outputs.squeeze(1), batch_y.float())
                 val_loss += loss.item()
         val_loss /= len(val_loader)
-        scheduler.step(val_loss)
-
+        scheduler.step(val_loss)  # Adjust LR based on val_loss
         # Inside train_model function:
-        temp_best_path = None  # Initialize to None
+        temp_best_path = None # Initialize to None; used for saving best model temporarily to avoid permission issues
         if val_loss < best_val_loss - CONFIG['EARLY_STOPPING_MIN_DELTA']:
             best_val_loss = val_loss
             patience_counter = 0
-            with tempfile.NamedTemporaryFile(suffix='.pth', delete=False) as temp_file:
+            with tempfile.NamedTemporaryFile(suffix='.pth', delete=False) as temp_file:  # Use temp file for safe saving in WSL/Windows mounted dirs
                 temp_best_path = temp_file.name
                 torch.save(model.state_dict(), temp_best_path)
                 logger.info(f"Saved temp best model for {symbol} at epoch {epoch+1} to {temp_best_path}")
@@ -692,25 +695,25 @@ def train_model(symbol: str, df: pd.DataFrame, epochs: int, batch_size: int, tim
             patience_counter += 1
             if patience_counter >= CONFIG['EARLY_STOPPING_PATIENCE']:
                 logger.info(f"Early stopping triggered for {symbol} at epoch {epoch+1}")
-                break
-
+                break  # Stop if no improvement to prevent overfitting
+        
         # After the loop:
         if temp_best_path and os.path.exists(temp_best_path):
             try:
-                model.load_state_dict(torch.load(temp_best_path))
+                model.load_state_dict(torch.load(temp_best_path))  # Load best weights from temp file
                 logger.info(f"Loaded best model state for {symbol} from temp file")
             except Exception as e:
                 logger.error(f"Failed to load best model for {symbol}: {str(e)}. Using final model state.")
             finally:
                 try:
-                    os.remove(temp_best_path)
+                    os.remove(temp_best_path)  # Clean up temp file
                     logger.info(f"Removed temp best model file for {symbol}")
                 except Exception as e:
                     logger.warning(f"Failed to remove temp file {temp_best_path}: {str(e)}")
         else:
             logger.warning(f"No temp best model file found for {symbol}; using final model state (no improvements during training?).")
     with open(os.path.join(CONFIG['CACHE_DIR'], f"{symbol}_scaler.pkl"), 'wb') as f:
-        pickle.dump(scaler, f)
+        pickle.dump(scaler, f)  # Cache scaler for inference consistency
     return model, scaler
 
 
@@ -918,57 +921,56 @@ def backtest(symbol: str, model: nn.Module, scaler: RobustScaler, df: pd.DataFra
         df_backtest, timesteps, inference_mode=True, inference_scaler=scaler
     )
     
-    model.eval()
-    model = model.to(device)
-    X_tensor = torch.tensor(X_seq, dtype=torch.float32).to(device)
-    
-    predictions = []
-    with torch.no_grad():
-        for i in range(0, len(X_tensor), CONFIG['BATCH_SIZE']):
-            batch = X_tensor[i:i + CONFIG['BATCH_SIZE']]
-            raw_logits = model(batch)
-            if i % 100 == 0:  # Log every 100 steps to avoid spam
-                logger.info(f"Sample raw logit for {symbol} at step {i}: mean={raw_logits.mean().item():.4f}, std={raw_logits.std().item():.4f}")
-            # Apply sigmoid to model outputs
-            outputs = torch.sigmoid(raw_logits)
-            predictions.extend(outputs.cpu().numpy().flatten())
-            del raw_logits  # Clean up
-            del outputs  # Explicitly delete outputs tensor
-    
-    predictions = np.array(predictions)
+    model.eval()  # Set model to evaluation mode for inference
+    model = model.to(device)  # Ensure model is on correct device
+    X_tensor = torch.tensor(X_seq, dtype=torch.float32).to(device)  # Convert sequences to tensor on device
 
-    true_y_for_accuracy = df['Future_Direction'].iloc[CONFIG['TIMESTEPS'] : ].values
-    valid_mask_for_accuracy = ~np.isnan(true_y_for_accuracy)
+    predictions = []
+    with torch.no_grad():  # Disable gradients to optimize memory and speed for inference
+        for i in range(0, len(X_tensor), CONFIG['BATCH_SIZE']):
+            batch = X_tensor[i:i + CONFIG['BATCH_SIZE']]  # Batch processing to handle large datasets without OOM
+            raw_logits = model(batch)
+            if i % 100 == 0: # Log every 100 steps to avoid spam; useful for monitoring long backtests
+                logger.info(f"Sample raw logit for {symbol} at step {i}: mean={raw_logits.mean().item():.4f}, std={raw_logits.std().item():.4f}")
+            # Apply sigmoid to model outputs to get probabilities between 0 and 1
+            outputs = torch.sigmoid(raw_logits)
+            predictions.extend(outputs.cpu().numpy().flatten())  # Collect on CPU to free GPU memory
+            del raw_logits # Clean up to release memory
+            del outputs # Explicitly delete outputs tensor
+
+    predictions = np.array(predictions)  # Convert to numpy for easier handling
+    true_y_for_accuracy = df['Future_Direction'].iloc[CONFIG['TIMESTEPS'] : ].values  # Align true labels with predictions
+    valid_mask_for_accuracy = ~np.isnan(true_y_for_accuracy)  # Mask NaNs in targets
     if np.any(valid_mask_for_accuracy):
-        accuracy_percentage = np.mean((np.array(predictions)[valid_mask_for_accuracy] > 0.5) == true_y_for_accuracy[valid_mask_for_accuracy]) * 100
+        accuracy_percentage = np.mean((np.array(predictions)[valid_mask_for_accuracy] > 0.5) == true_y_for_accuracy[valid_mask_for_accuracy]) * 100  # Binary accuracy (threshold 0.5)
     else:
         accuracy_percentage = 0.0
-    
-    logger.info(f"Predictions for {symbol}: min={predictions.min():.3f}, max={predictions.max():.3f}, mean={predictions.mean():.3f}")
-    
-    # Clean up CUDA tensors
+
+    logger.info(f"Predictions for {symbol}: min={predictions.min():.3f}, max={predictions.max():.3f}, mean={predictions.mean():.3f}")  # Summary stats for debugging prediction distribution
+
+    # Clean up CUDA tensors to free GPU memory for other operations
     del X_tensor
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
-    
-    # Initialize variables (initial_cash now per-symbol from call)
+
+    # Initialize variables (initial_cash now per-symbol from call); simulate trading state
     cash = initial_cash
-    returns = []
+    returns = []  # List of trade returns for metrics
     trade_count = 0
     win_rate = 0.0
-    position = 0
+    position = 0  # Current shares held
     entry_price = 0.0
     entry_time = None
-    max_price = 0.0
+    max_price = 0.0  # For trailing stop
     winning_trades = 0
-    
-    timestamps = pd.Series(df.index[timesteps:]).reset_index(drop=True)
-    sim_start = pd.Timestamp(CONFIG['BACKTEST_START_DATE'], tz='UTC')
+
+    timestamps = pd.Series(df.index[timesteps:]).reset_index(drop=True)  # Align timestamps with sequences
+    sim_start = pd.Timestamp(CONFIG['BACKTEST_START_DATE'], tz='UTC')  # Out-of-sample start to avoid overfitting
     valid_timestamps = timestamps[timestamps >= sim_start]
     if valid_timestamps.empty:
         k_start = 0
     else:
-        k_start = valid_timestamps.index[0]
+        k_start = valid_timestamps.index[0]  # Start index for backtest period
     logger.info(f"Backtest for {symbol}: starting cash=${cash:.2f}, k_start={k_start}, len(predictions)={len(predictions)}")
     if k_start >= len(predictions):
         logger.warning(f"No data points for backtest of {symbol}")
@@ -977,70 +979,76 @@ def backtest(symbol: str, model: nn.Module, scaler: RobustScaler, df: pd.DataFra
     if num_backtest_steps <= 0:
         logger.warning(f"No backtest steps available for {symbol} (num_backtest_steps={num_backtest_steps})")
         return cash, returns, trade_count, win_rate, 0.0
-    
+
+    # Pre-slice indicators for efficiency; aligns with backtest steps to avoid index errors
     atr = df['ATR'].iloc[timesteps + k_start:timesteps + k_start + num_backtest_steps].values
     prices = df['close'].iloc[timesteps + k_start:timesteps + k_start + num_backtest_steps].values
     rsi = df['RSI'].iloc[timesteps + k_start:timesteps + k_start + num_backtest_steps].values
     adx = df['ADX'].iloc[timesteps + k_start:timesteps + k_start + num_backtest_steps].values
     volatility = df['Volatility'].iloc[timesteps + k_start:timesteps + k_start + num_backtest_steps].values
     sim_timestamps = timestamps.iloc[k_start:k_start + num_backtest_steps].values
-    
+
     for local_i in range(num_backtest_steps):
-        if local_i % 100 == 0:  # Log every 100 steps to avoid spam
+        if local_i % 100 == 0: # Log every 100 steps to avoid spam; helps track progress in long simulations
             logger.info(f"Processing backtest step {local_i} for {symbol}: prediction={predictions[k_start + local_i]:.3f}")
-        i = k_start + local_i
+        i = k_start + local_i  # Global index for predictions
         pred = predictions[i]
         price = prices[local_i]
         atr_val = atr[local_i]
         current_rsi = rsi[local_i]
         current_adx = adx[local_i]
         current_volatility = volatility[local_i]
-        ts = pd.Timestamp(sim_timestamps[local_i])
-        
+        ts = pd.Timestamp(sim_timestamps[local_i])  # Current timestamp for logging
+
+        # Skip if volatility too high or trend too weak (ADX low); filters out risky periods
         if current_volatility > max_volatility or current_adx < adx_trend_threshold:
             continue
-        
+
+        # Skip low-confidence predictions
         if pred < confidence_threshold:
             continue
-        
+
+        # Calculate position size based on risk; uses ATR for volatility-adjusted sizing
         if cash >= price:
             qty = max(1, int((cash * risk_percentage) / (atr_val * stop_loss_atr_multiplier)))
             cost = qty * price + transaction_cost_per_trade
             if cost > cash:
-                qty = max(0, int((cash - transaction_cost_per_trade) / price))
+                qty = max(0, int((cash - transaction_cost_per_trade) / price))  # Adjust qty if cost exceeds cash
                 cost = qty * price + transaction_cost_per_trade
         else:
             qty = 0
             cost = 0
-        
+
         #logger.info(f"Checking buy for {symbol}: pred={pred:.3f}, qty={qty}, cash={cash:.2f}, price={price:.2f}, rsi={current_rsi:.2f}, adx={current_adx:.2f}")
-        
+
+        # Buy condition: High pred, oversold RSI, strong trend, sufficient qty/cash
         if pred > buy_threshold and position == 0 and current_rsi < rsi_buy_threshold and current_adx > adx_trend_threshold and qty > 0 and cash >= cost:
-            if cash - cost >= 0:  # Safety check to prevent negative cash
+            if cash - cost >= 0: # Safety check to prevent negative cash
                 position = qty
                 entry_price = price
-                max_price = price
+                max_price = price  # Init for trailing stop
                 entry_time = ts
                 cash -= cost
                 logger.info(f"{ts}: Bought {qty} shares of {symbol} at ${price:.2f}, cash: ${cash:.2f}")
             else:
                 logger.info(f"Insufficient cash to buy {qty} shares of {symbol}: cash={cash:.2f}, cost={cost:.2f}")
-        
+
         elif position > 0:
             if price > max_price:
-                max_price = price
+                max_price = price  # Update peak for trailing stop
             trailing_stop = max_price * (1 - trailing_stop_percentage)
-            stop_loss = entry_price - stop_loss_atr_multiplier * atr_val
-            take_profit = entry_price + take_profit_atr_multiplier * atr_val
-            
+            stop_loss = entry_price - stop_loss_atr_multiplier * atr_val  # ATR-based dynamic stop
+            take_profit = entry_price + take_profit_atr_multiplier * atr_val  # ATR-based profit target
+           
             if not isinstance(entry_time, pd.Timestamp):
-                raise TypeError(f"entry_time must be a pandas.Timestamp, got {type(entry_time)}")
-            time_held = (ts - entry_time).total_seconds() / 60
-            
+                raise TypeError(f"entry_time must be a pandas.Timestamp, got {type(entry_time)}")  # Type safety for time calculations
+            time_held = (ts - entry_time).total_seconds() / 60  # Minutes held
+
+            # Sell if min hold met and any exit condition: stop hit, profit taken, or signal/RSI reversal
             if time_held >= min_holding_period_minutes:
                 if price <= trailing_stop or price <= stop_loss or price >= take_profit or (pred < sell_threshold and current_rsi > rsi_sell_threshold):
                     cash += position * price - transaction_cost_per_trade
-                    ret = (price - entry_price) / entry_price
+                    ret = (price - entry_price) / entry_price  # Per-trade return
                     returns.append(ret)
                     trade_count += 1
                     if ret > 0:
@@ -1050,10 +1058,11 @@ def backtest(symbol: str, model: nn.Module, scaler: RobustScaler, df: pd.DataFra
                     logger.info(f"After sell: position={position}, cash={cash:.2f}")
                     entry_time = None
                     max_price = 0.0
-        
+
         else:
             logger.info(f"Skipped buy for {symbol}: pred={pred:.3f}, rsi={current_rsi:.2f}, adx={current_adx:.2f}, volatility={current_volatility:.2f}, qty={qty}, cost={qty * price:.2f}, cash={cash:.2f}")
-    
+
+    # Close any open position at end of simulation
     if position > 0:
         cash += position * prices[-1] - transaction_cost_per_trade
         ret = (prices[-1] - entry_price) / entry_price
@@ -1061,7 +1070,7 @@ def backtest(symbol: str, model: nn.Module, scaler: RobustScaler, df: pd.DataFra
         trade_count += 1
         if ret > 0:
             winning_trades += 1
-    win_rate = (winning_trades / trade_count * 100) if trade_count > 0 else 0.0
+    win_rate = (winning_trades / trade_count * 100) if trade_count > 0 else 0.0  # Avoid division by zero
     return cash, returns, trade_count, win_rate, accuracy_percentage
 
 def buy_and_hold_backtest(dfs_backtest: Dict[str, pd.DataFrame], initial_cash: float) -> float:
@@ -1284,21 +1293,20 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
         portfolio_value = CONFIG['INITIAL_CASH']
         peak_value = portfolio_value
 
-        while True:
+        while True:  # Infinite loop for continuous live trading
             @retry(stop=stop_after_attempt(CONFIG['API_RETRY_ATTEMPTS']), wait=wait_fixed(CONFIG['API_RETRY_DELAY'] / 1000), retry=retry_if_exception_type(APIError))
             def get_clock_with_retry():
-                return trading_client.get_clock()
-
+                return trading_client.get_clock()  # Retry wrapper for API calls to handle transient failures
             try:
                 clock = get_clock_with_retry()
             except APIError as e:
                 logger.error(f"Failed to get clock after retries: {str(e)}")
                 send_email("API Error", f"Failed to get clock: {str(e)}")
-                time.sleep(60)  # Wait 1 min before next loop iteration
+                time.sleep(60) # Wait 1 min before next loop iteration to avoid spamming
                 continue
-            if clock.is_open:
-                now = datetime.now()
-                next_mark = now.replace(second=0, microsecond=0)
+            if clock.is_open:  # Only trade when market is open
+                now = datetime.now()  # Current time for scheduling
+                next_mark = now.replace(second=0, microsecond=0)  # Align to next 15-min mark for bar intervals
                 minutes = now.minute
                 if minutes % 15 != 0:
                     next_mark += timedelta(minutes=(15 - minutes % 15))
@@ -1306,82 +1314,77 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
                     next_mark += timedelta(minutes=15)
                 seconds_to_sleep = (next_mark - now).total_seconds()
                 if seconds_to_sleep > 0:
-                    time.sleep(seconds_to_sleep)
-                
+                    time.sleep(seconds_to_sleep)  # Sleep to sync with timeframe (e.g., 15-min bars)
+            
                 @retry(stop=stop_after_attempt(CONFIG['API_RETRY_ATTEMPTS']), wait=wait_fixed(CONFIG['API_RETRY_DELAY'] / 1000), retry=retry_if_exception_type(APIError))
                 def get_account_with_retry():
                     return trading_client.get_account()
-
                 try:
                     account = get_account_with_retry()
                     cash = float(account.cash)
-                    portfolio_value = float(account.equity)
+                    portfolio_value = float(account.equity)  # Fetch current account state
                 except APIError as e:
                     logger.error(f"Failed to get account after retries: {str(e)}")
                     send_email("API Error", f"Failed to get account: {str(e)}")
-                    time.sleep(60)  # Wait 1 min before next loop iteration
+                    time.sleep(60) # Wait 1 min before next loop iteration
                     continue
-                peak_value = max(peak_value, portfolio_value)
+                peak_value = max(peak_value, portfolio_value)  # Track peak for drawdown calculation
                 drawdown = (peak_value - portfolio_value) / peak_value
                 if drawdown > CONFIG['MAX_DRAWDOWN_LIMIT']:
                     logger.warning(f"Portfolio drawdown exceeded {CONFIG['MAX_DRAWDOWN_LIMIT'] * 100}%. Pausing trading.")
                     send_email("Portfolio Drawdown Alert", f"Portfolio drawdown exceeded {CONFIG['MAX_DRAWDOWN_LIMIT'] * 100}%. Trading paused.")
-                    break
-                
-                decisions = []
+                    break  # Halt trading on excessive drawdown to protect capital
+            
+                decisions = []  # Collect decisions for summary email
                 @retry(stop=stop_after_attempt(CONFIG['API_RETRY_ATTEMPTS']), wait=wait_fixed(CONFIG['API_RETRY_DELAY'] / 1000), retry=retry_if_exception_type(APIError))
                 def get_all_positions_with_retry():
                     return trading_client.get_all_positions()
-
                 try:
-                    open_positions = get_all_positions_with_retry()
+                    open_positions = get_all_positions_with_retry()  # Fetch current holdings
                 except APIError as e:
                     logger.error(f"Failed to get open positions after retries: {str(e)}")
                     send_email("API Error", f"Failed to get open positions: {str(e)}")
-                    time.sleep(60)  # Wait 1 min before next loop iteration
+                    time.sleep(60) # Wait 1 min before next loop iteration
                     continue
                 for symbol in CONFIG['SYMBOLS']:
-                    if symbol in models:
-                        df = fetch_recent_data(symbol, CONFIG['LIVE_DATA_BARS'])
-                        sentiment = sentiments[symbol]  # Use training sentiment for consistency
-                        df = calculate_indicators(df, sentiment)
-                        # Define features list (copied from preprocess_data for consistency)
+                    if symbol in models:  # Only process symbols with trained models
+                        df = fetch_recent_data(symbol, CONFIG['LIVE_DATA_BARS'])  # Get latest bars for indicators/prediction
+                        sentiment = sentiments[symbol] # Use training sentiment for consistency to avoid retraining overhead
+                        df = calculate_indicators(df, sentiment)  # Compute TA indicators
+                        # Define features list (copied from preprocess_data for consistency); ensures matching shape
                         features = [
                             'close', 'high', 'low', 'volume', 'MA20', 'MA50', 'RSI',
                             'MACD', 'MACD_signal', 'OBV', 'VWAP', 'ATR', 'CMF', 'Close_ATR',
                             'MA20_ATR', 'Return_1d', 'Return_5d', 'Volatility', 'BB_upper',
                             'BB_lower', 'Stoch_K', 'Stoch_D', 'ADX', 'Sentiment'
                         ]
-
-                        # Compute prediction and current values from model and df
+                        # Compute prediction and current values from model and df; handles insufficient data gracefully
                         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
                         if len(df) < CONFIG['TIMESTEPS'] + 1:
                             logger.warning(f"Insufficient data for {symbol} live prediction: {len(df)} bars")
-                            prediction = 0.5
+                            prediction = 0.5  # Neutral fallback
                             price = df['close'].iloc[-1] if not df.empty and len(df) > 0 else 0.0
                             current_rsi = df['RSI'].iloc[-1] if not df.empty and 'RSI' in df.columns else 50.0
                             current_adx = df['ADX'].iloc[-1] if not df.empty and 'ADX' in df.columns else 0.0
                             current_volatility = df['Volatility'].iloc[-1] if not df.empty and 'Volatility' in df.columns else 0.0
                             atr_val = df['ATR'].iloc[-1] if not df.empty and 'ATR' in df.columns else 0.0
                         else:
-                            X_seq, _, _ = preprocess_data(df, CONFIG['TIMESTEPS'], inference_mode=True, inference_scaler=scalers[symbol], fit_scaler=False)
-                            # Use the most recent sequence for live prediction
+                            X_seq, _, _ = preprocess_data(df, CONFIG['TIMESTEPS'], inference_mode=True, inference_scaler=scalers[symbol], fit_scaler=False)  # Prep latest data
+                            # Use the most recent sequence for live prediction; single inference for low latency
                             recent_seq = X_seq[-1:].astype(np.float32)
                             model = models[symbol].to(device)
                             model.eval()
                             with torch.no_grad():
                                 pred_logit = model(torch.tensor(recent_seq).to(device))
-                                prediction = torch.sigmoid(pred_logit).cpu().item()
+                                prediction = torch.sigmoid(pred_logit).cpu().item()  # Probability output
                             price = float(df['close'].iloc[-1])
                             current_rsi = float(df['RSI'].iloc[-1])
                             current_adx = float(df['ADX'].iloc[-1])
                             current_volatility = float(df['Volatility'].iloc[-1])
                             atr_val = float(df['ATR'].iloc[-1])
                             logger.info(f"Live prediction for {symbol}: {prediction:.3f}, price=${price:.2f}, RSI={current_rsi:.2f}")
-
-                        decision = "Hold"
-
-                        # Fetch position (qty_owned etc. only for sell/hold checks)
+                        decision = "Hold"  # Default; updated based on conditions
+                        # Fetch position (qty_owned etc. only for sell/hold checks); uses recent orders for entry_time
                         qty_owned = 0
                         entry_time = None
                         entry_price = 0.0
@@ -1389,42 +1392,42 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
                         position_obj = next((pos for pos in open_positions if pos.symbol == symbol), None)
                         if position_obj:
                             qty_owned = int(float(position_obj.qty))
-                            # Fetch entry time from the latest filled BUY order
+                            # Fetch entry time from the latest filled BUY order; limits to 50 for efficiency
                             order_req = GetOrdersRequest(
                                 status=QueryOrderStatus.CLOSED,
                                 symbols=[symbol],
                                 side=OrderSide.BUY,
-                                limit=50  # Limit to recent orders to avoid large responses
+                                limit=50 # Limit to recent orders to avoid large responses
                             )
                             try:
                                 orders = trading_client.get_orders(order_req)
                                 filled_buy_orders = [o for o in orders if o.status == OrderStatus.FILLED and o.side == OrderSide.BUY]
                                 if filled_buy_orders:
                                     latest_order = max(filled_buy_orders, key=lambda o: o.filled_at if o.filled_at else datetime.min.replace(tzinfo=timezone.utc))
-                                    entry_time = latest_order.filled_at if latest_order.filled_at else now
+                                    entry_time = latest_order.filled_at if latest_order.filled_at else now  # Use filled time or fallback
                                 else:
-                                    entry_time = now  # Fallback if no filled buy orders found
+                                    entry_time = now # Fallback if no filled buy orders found
                             except Exception as e:
                                 logger.warning(f"Failed to fetch orders for {symbol} entry time: {str(e)}. Using current time as fallback.")
                                 entry_time = now
                             entry_price = float(position_obj.avg_entry_price)
                             if entry_time:
                                 if entry_time.tzinfo is None:
-                                    entry_time = entry_time.replace(tzinfo=timezone.utc)
+                                    entry_time = entry_time.replace(tzinfo=timezone.utc)  # Ensure UTC for consistent calculations
                                 else:
                                     entry_time = entry_time.astimezone(timezone.utc)
-                            time_held = (now - entry_time).total_seconds() / 60 if entry_time else 0
-
+                            time_held = (now - entry_time).total_seconds() / 60 if entry_time else 0  # Time held in minutes
+                        # Decision logic: Mirrors backtest but with real API; filters first, then buy/sell
                         if current_volatility > CONFIG['MAX_VOLATILITY'] or current_adx < CONFIG['ADX_TREND_THRESHOLD']:
-                            decision = "Hold (Filters)"
+                            decision = "Hold (Filters)"  # Skip risky conditions
                         elif CONFIG['PREDICTION_THRESHOLD_SELL'] < prediction < CONFIG['CONFIDENCE_THRESHOLD']:
                             decision = "Hold (Low Confidence)"
                         elif prediction > max(CONFIG['PREDICTION_THRESHOLD_BUY'], CONFIG['CONFIDENCE_THRESHOLD']) and current_rsi < CONFIG['RSI_BUY_THRESHOLD']:
                             decision = "Buy"
-                            if atr_val > 0:
+                            if atr_val > 0:  # Valid ATR required for sizing
                                 risk_per_trade = cash * (CONFIG['RISK_PERCENTAGE'] / 100)
                                 stop_loss_distance = atr_val * CONFIG['STOP_LOSS_ATR_MULTIPLIER']
-                                qty = max(1, int(risk_per_trade / stop_loss_distance))
+                                qty = max(1, int(risk_per_trade / stop_loss_distance))  # Risk-adjusted qty
                                 cost = qty * price + CONFIG['TRANSACTION_COST_PER_TRADE']
                                 if cost <= cash:
                                     logger.info(f"Submitting buy order for {qty} shares of {symbol} at ${price:.2f}")
@@ -1432,10 +1435,10 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
                                         symbol=symbol,
                                         qty=qty,
                                         side=OrderSide.BUY,
-                                        time_in_force=TimeInForce.GTC
+                                        time_in_force=TimeInForce.GTC  # Good 'til canceled
                                     )
                                     try:
-                                        trading_client.submit_order(order)
+                                        trading_client.submit_order(order)  # Submit market buy
                                         email_body = f"""
                         Bought {qty} shares of {symbol} at ${price:.2f}
                         Prediction Confidence: {prediction:.3f}
@@ -1446,7 +1449,7 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
                         Current Cash: ${cash - cost:.2f}
                         Portfolio Value: ${portfolio_value:.2f}
                         """
-                                        send_email(f"Trade Update: Bought {symbol}", email_body)
+                                        send_email(f"Trade Update: Bought {symbol}", email_body)  # Notify on success
                                     except Exception as e:
                                         logger.error(f"Failed to submit buy order for {symbol}: {str(e)}")
                                         decision = "Buy (Failed)"
@@ -1461,15 +1464,15 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
                         Current Cash: ${cash:.2f}
                         Portfolio Value: ${portfolio_value:.2f}
                         """
-                                        send_email(f"Trade Failure: {symbol}", email_body)
+                                        send_email(f"Trade Failure: {symbol}", email_body)  # Notify on failure
                                 else:
                                     logger.warning(f"Insufficient cash for buy {symbol}: cost={cost:.2f}, cash={cash:.2f}")
                                     decision = "Hold (Insufficient Cash)"
                             else:
                                 logger.warning(f"Invalid ATR for {symbol}: {atr_val}")
                                 decision = "Hold (Invalid ATR)"
-                        elif qty_owned > 0 and time_held >= CONFIG['MIN_HOLDING_PERIOD_MINUTES']:
-                            max_price = max(float(position_obj.current_price) if position_obj else price, price)
+                        elif qty_owned > 0 and time_held >= CONFIG['MIN_HOLDING_PERIOD_MINUTES']:  # Check min hold to avoid day trade violations
+                            max_price = max(float(position_obj.current_price) if position_obj else price, price)  # Update from current price
                             trailing_stop = max_price * (1 - CONFIG['TRAILING_STOP_PERCENTAGE'])
                             stop_loss = entry_price - CONFIG['STOP_LOSS_ATR_MULTIPLIER'] * atr_val
                             take_profit = entry_price + CONFIG['TAKE_PROFIT_ATR_MULTIPLIER'] * atr_val
@@ -1514,7 +1517,7 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
                                 logger.warning(f"Invalid ATR for {symbol}: {atr_val}")
                                 decision = "Hold (Invalid ATR)"
                         elif qty_owned > 0 and time_held >= CONFIG['MIN_HOLDING_PERIOD_MINUTES']:
-                            # Compute stops using current price
+                            # Compute stops using current price; dynamic based on latest data
                             max_price = max(float(position_obj.current_price) if position_obj else price, price)
                             trailing_stop = max_price * (1 - CONFIG['TRAILING_STOP_PERCENTAGE'])
                             stop_loss = entry_price - CONFIG['STOP_LOSS_ATR_MULTIPLIER'] * atr_val
@@ -1526,32 +1529,32 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
                                 try:
                                     trading_client.submit_order(order)
                                     email_body = f"""
-Sold {qty_owned} shares of {symbol} at ${price:.2f}
-Prediction Confidence: {prediction:.3f}
-RSI: {current_rsi:.2f}
-ADX: {current_adx:.2f}
-Volatility: {current_volatility:.2f}
-ATR: {atr_val:.2f}
-Time Held: {time_held:.2f} minutes
-Current Cash: ${float(account.cash):.2f}
-Portfolio Value: ${portfolio_value:.2f}
-"""
+    Sold {qty_owned} shares of {symbol} at ${price:.2f}
+    Prediction Confidence: {prediction:.3f}
+    RSI: {current_rsi:.2f}
+    ADX: {current_adx:.2f}
+    Volatility: {current_volatility:.2f}
+    ATR: {atr_val:.2f}
+    Time Held: {time_held:.2f} minutes
+    Current Cash: ${float(account.cash):.2f}
+    Portfolio Value: ${portfolio_value:.2f}
+    """
                                     send_email(f"Trade Update: {symbol}", email_body)
                                 except Exception as e:
                                     logger.error(f"Failed to submit sell order for {symbol}: {str(e)}")
                                     decision = "Hold"
                                     email_body = f"""
-Failed to sell {qty_owned} shares of {symbol} at ${price:.2f}
-Error: {str(e)}
-Prediction Confidence: {prediction:.3f}
-RSI: {current_rsi:.2f}
-ADX: {current_adx:.2f}
-Volatility: {current_volatility:.2f}
-ATR: {atr_val:.2f}
-Time Held: {time_held:.2f} minutes
-Current Cash: ${float(account.cash):.2f}
-Portfolio Value: ${portfolio_value:.2f}
-"""
+    Failed to sell {qty_owned} shares of {symbol} at ${price:.2f}
+    Error: {str(e)}
+    Prediction Confidence: {prediction:.3f}
+    RSI: {current_rsi:.2f}
+    ADX: {current_adx:.2f}
+    Volatility: {current_volatility:.2f}
+    ATR: {atr_val:.2f}
+    Time Held: {time_held:.2f} minutes
+    Current Cash: ${float(account.cash):.2f}
+    Portfolio Value: ${portfolio_value:.2f}
+    """
                                     send_email(f"Trade Failure: {symbol}", email_body)
                                 else:
                                     logger.warning(f"Insufficient cash for buy {symbol}: cost={cost:.2f}, cash={cash:.2f}")
@@ -1560,7 +1563,7 @@ Portfolio Value: ${portfolio_value:.2f}
                                 logger.warning(f"Invalid ATR for {symbol}: {atr_val}")
                                 decision = "Hold (Invalid ATR)"
                         elif qty_owned > 0 and time_held >= CONFIG['MIN_HOLDING_PERIOD_MINUTES']:
-                            # Compute stops using current price
+                            # Compute stops using current price; dynamic based on latest data
                             max_price = max(float(position_obj.current_price) if position_obj else price, price)
                             trailing_stop = max_price * (1 - CONFIG['TRAILING_STOP_PERCENTAGE'])
                             stop_loss = entry_price - CONFIG['STOP_LOSS_ATR_MULTIPLIER'] * atr_val
@@ -1572,32 +1575,32 @@ Portfolio Value: ${portfolio_value:.2f}
                                 try:
                                     trading_client.submit_order(order)
                                     email_body = f"""
-Sold {qty_owned} shares of {symbol} at ${price:.2f}
-Prediction Confidence: {prediction:.3f}
-RSI: {current_rsi:.2f}
-ADX: {current_adx:.2f}
-Volatility: {current_volatility:.2f}
-ATR: {atr_val:.2f}
-Time Held: {time_held:.2f} minutes
-Current Cash: ${float(account.cash):.2f}
-Portfolio Value: ${portfolio_value:.2f}
-"""
+    Sold {qty_owned} shares of {symbol} at ${price:.2f}
+    Prediction Confidence: {prediction:.3f}
+    RSI: {current_rsi:.2f}
+    ADX: {current_adx:.2f}
+    Volatility: {current_volatility:.2f}
+    ATR: {atr_val:.2f}
+    Time Held: {time_held:.2f} minutes
+    Current Cash: ${float(account.cash):.2f}
+    Portfolio Value: ${portfolio_value:.2f}
+    """
                                     send_email(f"Trade Update: {symbol}", email_body)
                                 except Exception as e:
                                     logger.error(f"Failed to submit sell order for {symbol}: {str(e)}")
                                     decision = "Hold"
                                     email_body = f"""
-Failed to sell {qty_owned} shares of {symbol} at ${price:.2f}
-Error: {str(e)}
-Prediction Confidence: {prediction:.3f}
-RSI: {current_rsi:.2f}
-ADX: {current_adx:.2f}
-Volatility: {current_volatility:.2f}
-ATR: {atr_val:.2f}
-Time Held: {time_held:.2f} minutes
-Current Cash: ${float(account.cash):.2f}
-Portfolio Value: ${portfolio_value:.2f}
-"""
+    Failed to sell {qty_owned} shares of {symbol} at ${price:.2f}
+    Error: {str(e)}
+    Prediction Confidence: {prediction:.3f}
+    RSI: {current_rsi:.2f}
+    ADX: {current_adx:.2f}
+    Volatility: {current_volatility:.2f}
+    ATR: {atr_val:.2f}
+    Time Held: {time_held:.2f} minutes
+    Current Cash: ${float(account.cash):.2f}
+    Portfolio Value: ${portfolio_value:.2f}
+    """
                                     send_email(f"Trade Failure: {symbol}", email_body)
                         decisions.append({
                             'symbol': symbol,
@@ -1609,6 +1612,7 @@ Portfolio Value: ${portfolio_value:.2f}
                             'price': price,
                             'owned': qty_owned
                         })
+                # Summarize decisions and send email; provides overview without individual trade emails
                 summary_body = "Trading Summary:\n"
                 for dec in decisions:
                     summary_body += f"{dec['symbol']}: {dec['decision']}, Confidence: {dec['confidence']:.3f}, RSI: {dec['rsi']:.2f}, ADX: {dec['adx']:.2f}, Volatility: {dec['volatility']:.2f}, Price: ${dec['price']:.2f}, Owned: {dec['owned']}\n"
@@ -1616,14 +1620,14 @@ Portfolio Value: ${portfolio_value:.2f}
                 send_email("Trading Summary", summary_body)
             else:
                 next_open = clock.next_open
-                while datetime.now(timezone.utc) < next_open:
+                while datetime.now(timezone.utc) < next_open:  # Countdown loop when market closed
                     time_left = next_open - datetime.now(timezone.utc)
                     hours, remainder = divmod(time_left.total_seconds(), 3600)
                     minutes, seconds = divmod(remainder, 60)
                     timer_str = f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
-                    print(f"\r{Fore.RED}Time until market opens: {timer_str}{Style.RESET_ALL}", end='')
+                    print(f"\r{Fore.RED}Time until market opens: {timer_str}{Style.RESET_ALL}", end='')  # Visual timer
                     time.sleep(1)
-                print()
+                print()  # New line after countdown
 
     else:
         dfs_backtest = {}
