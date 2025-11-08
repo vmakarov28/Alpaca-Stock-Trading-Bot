@@ -55,7 +55,7 @@ Restart your PC after successful installation.
 ## Step 2: Install pyenv for Python Management
 *********\*\***From now on the rest of the steps will be completed in wsl*\*\***********
 
-Pyenv allows isolated Python environments.
+We use Pyenv because it allows isolated Python environments.
 
 ### Install dependencies for Pyenv:
 Use this command:
