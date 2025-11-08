@@ -1,6 +1,6 @@
 
 # +------------------------------------------------------------------------------+
-# |                            Alpaca Neural Bot v9.4.2                          |
+# |                            Alpaca Neural Bot v9.4.1                          |
 # +------------------------------------------------------------------------------+
 # | Author: Vladimir Makarov                                                     |
 # | Project Start Date: May 9, 2025                                              |
@@ -140,7 +140,7 @@ CONFIG = {
 }
 
 #pyenv activate pytorch_env
-#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.4.2.py --backtest --force-train
+#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.4.py --backtest --force-train
 
 
 def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -1139,17 +1139,7 @@ def format_email_body(
     for symbol, metrics in symbol_results.items():
         body.append(f"\n{symbol}:")
         for metric, value in metrics.items():
-            metric_lower = metric.lower()
-            if 'final_value' in metric_lower:
-                value_str = f"${value:.2f}"
-                unit = ''
-            else:
-                value_str = f"{value:.3f}"
-                if any(k in metric_lower for k in ['return', 'drawdown', 'var', 'prob']):
-                    unit = '%'
-                else:
-                    unit = ''
-            body.append(f"  {metric.replace('_', ' ').title()}: {value_str}{unit}")
+            body.append(f"  {metric.replace('_', ' ').title()}: {value:.3f}%")
         body.append(f"  Trades: {trade_counts.get(symbol, 0)}")
         body.append(f"  Win Rate: {win_rates.get(symbol, 0.0):.3f}%")
     return "\n".join(body)
