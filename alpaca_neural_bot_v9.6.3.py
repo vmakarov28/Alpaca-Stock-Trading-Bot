@@ -1,6 +1,6 @@
 
 # +------------------------------------------------------------------------------+
-# |                            Alpaca Neural Bot v9.5                            |
+# |                            Alpaca Neural Bot v9.6.3                          |
 # +------------------------------------------------------------------------------+
 # | Author: Vladimir Makarov                                                     |
 # | Project Start Date: May 9, 2025                                              |
@@ -239,17 +239,6 @@ def train_wrapper(args):
     training_time_in_milliseconds = (end_time_for_training - start_time_for_training) * 1000
     return (*result_from_train_symbol, training_time_in_milliseconds)
 
-
-# Configure logging
-root_logger = logging.getLogger()
-root_logger.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-file_handler = logging.FileHandler(CONFIG['LOG_FILE'])
-file_handler.setFormatter(formatter)
-stream_handler = logging.StreamHandler()
-stream_handler.setFormatter(formatter)
-root_logger.addHandler(file_handler)
-root_logger.addHandler(stream_handler)
 
 logger = logging.getLogger(__name__)
 
@@ -1200,7 +1189,12 @@ def get_api_keys(config: Dict) -> None:
     else:
         logger.info("Using hardcoded Alpaca API keys from CONFIG.")
 
-def main(backtest_only: bool = False, force_train: bool = False) -> None:
+def main(backtest_only: bool = False, force_train: bool = False, debug: bool = False) -> None:
+    logging.basicConfig(
+        level=logging.DEBUG if debug else logging.INFO,
+        format='%(asctime)s,%(msecs)03d - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
     """Main function to execute the trading bot with portfolio-level risk management."""
     print(f"Device set to use {torch.device('cuda' if torch.cuda.is_available() else 'cpu')}")
     if not backtest_only:
@@ -1281,10 +1275,11 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
         if progress_bar:
             progress_bar.close()
 
-        for info in stock_info:
-            for line in info:
-                print(line)
-            print()
+        if debug:
+            for info in stock_info:
+                for line in info:
+                    print(line)
+                print()
 
         portfolio_value = CONFIG['INITIAL_CASH']
         peak_value = portfolio_value
@@ -1727,10 +1722,11 @@ Portfolio Value: ${portfolio_value:.2f}
             if progress_bar:
                 progress_bar.close()
 
-            for info in stock_info:
-                for line in info:
-                    print(line)
-                print()
+            if debug:
+                for info in stock_info:
+                    for line in info:
+                        print(line)
+                    print()
 
             # Copy standard model/scaler files to attempt-specific paths
             for symbol in CONFIG['SYMBOLS']:
@@ -1925,16 +1921,30 @@ Portfolio Value: ${portfolio_value:.2f}
             bh_color = Fore.GREEN if final_value > bh_final_value else Fore.RED
             print(f"\nBuy-and-Hold Final Value: {bh_color}${bh_final_value:.2f}{Style.RESET_ALL}")
             print(f"Day Trading {'beats' if final_value > bh_final_value else 'does not beat'} Buy-and-Hold.")
-            if(final_value <= 100000):
-                logger.info(f"Backtest completed: Final value: {Fore.RED} ${final_value:.2f}")
-            else:
-                logger.info(f"Backtest completed: Final value: {Fore.GREEN} ${final_value:.2f}")
+            color = Fore.RED if final_value <= 100000 else Fore.GREEN
+            print(f"\nBacktest completed: Final value: {color}${final_value:.2f}{Style.RESET_ALL}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Trading bot with backtest mode")
     parser.add_argument('--backtest', action='store_true', help="Run in backtest-only mode")
     parser.add_argument('--force-train', action='store_true', help="Force retraining of models")
+    parser.add_argument('--DEBUG', action='store_true', help="Enable debug printing for detailed informative outputs")
     args = parser.parse_args()
+
+    # Configure logging (moved here to access args.DEBUG)
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    file_handler = logging.FileHandler(CONFIG['LOG_FILE'])
+    file_handler.setFormatter(formatter)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    stream_handler.setLevel(logging.WARNING if not args.DEBUG else logging.INFO)  # Hide INFO on console unless --DEBUG
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(stream_handler)
+
+    logger = logging.getLogger(__name__)
+
     mp.set_start_method('spawn', force=True)  # Set early for CUDA multiprocessing safety
-    main(backtest_only=args.backtest, force_train=args.force_train)
+    main(backtest_only=args.backtest, force_train=args.force_train, debug=args.DEBUG)
