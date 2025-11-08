@@ -1,11 +1,11 @@
 
 # +------------------------------------------------------------------------------+
-# |                            Alpaca Neural Bot v9.7.0                          |
+# |                            Alpaca Neural Bot v9.7.5                          |
 # +------------------------------------------------------------------------------+
 # | Author: Vladimir Makarov                                                     |
 # | Project Start Date: May 9, 2025                                              |
 # | License: GNU Lesser General Public License v2.1                              |
-# | Version: 9.3.9 (Un-Released)                                                 |
+# | Version: 9.7.5 (Un-Released)                                                 |
 # +------------------------------------------------------------------------------+
 
 import os  # For operating system interactions, like creating directories and handling file paths
@@ -127,7 +127,7 @@ CONFIG = {
     # API Retry Settings - Configuration for handling API failures
     'API_RETRY_ATTEMPTS': 3,  # Number of retry attempts for API calls
     'API_RETRY_DELAY': 1000,  # Delay between retry attempts in milliseconds
-    'MODEL_VERSION': 'v935',  # Used to fetch correct version of model and scalars
+    'MODEL_VERSION': 'v935',  # Model architecture version; increment on structural changes to force retrain
 
     # New: Retraining Cycle Parameters
     'ENABLE_RETRAIN_CYCLE': True,  # Enable loop to retrain until criteria met (backtest mode only)
@@ -188,10 +188,13 @@ def get_sentiment_score(symbol: str) -> float:
     else:
         # Placeholder for news fetching; in full code, use Alpaca news API or external (e.g., via tools)
         # For demo, simulate with dummy news and transformers pipeline
-        sentiment_pipeline = pipeline("sentiment-analysis")
-        dummy_news = [f"Positive news for {symbol}", f"Neutral update on {symbol}", f"Negative report for {symbol}"]  # Replace with real fetch
-        scores = [analysis['score'] if analysis['label'] == 'POSITIVE' else -analysis['score'] for text in dummy_news for analysis in sentiment_pipeline(text)]
-        score = np.mean(scores)
+        # sentiment_pipeline = pipeline("sentiment-analysis")  # Comment out to avoid unused download/execution
+        # dummy_news = [f"Positive news for {symbol}", f"Neutral update on {symbol}", f"Negative report for {symbol}"] # Replace with real fetch
+        # scores = [analysis['score'] if analysis['label'] == 'POSITIVE' else -analysis['score'] for text in dummy_news for analysis in sentiment_pipeline(text)]
+       
+        # score = np.mean(scores) # Uncomment for real sentiment (-1 to 1)
+        score = 0.0  # Override to neutral while keeping framework
+        
         with open(cache_path, 'wb') as f:
             pickle.dump(score, f)
         logger.info(f"Calculated sentiment score for {symbol}: {score:.3f}")
@@ -425,7 +428,8 @@ def load_news_sentiment(symbol: str) -> Tuple[float, bool]:
             sentiment_score = pickle.load(f)
         return sentiment_score, True
     else:
-        sentiment_score = np.random.uniform(-1.0, 1.0)  # Random sentiment for testing
+        #sentiment_score = np.random.uniform(-1.0, 1.0)  # Random sentiment for testing
+        sentiment_score = 0.0  # Override to neutral while keeping framework
         with open(cache_file, 'wb') as f:
             pickle.dump(sentiment_score, f)
         return sentiment_score, False
