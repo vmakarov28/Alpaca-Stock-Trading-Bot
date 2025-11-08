@@ -71,14 +71,14 @@ Add to shell profile (add to ~/.bashrc or ~/.zshrc). Open the file with the nano
 
     nano ~/.bashrc
     
-Then add the new paths to the file.
+Then add the new paths to the end of the file.
 > export PATH="$HOME/.pyenv/bin:$PATH"
 > 
 > eval "$(pyenv init --path)"
 > 
 > eval "$(pyenv virtualenv-init -)"
 > 
-Press Cntrl + O then Enter to save and Cntrl + X to exit the file.
+Press `Cntrl + O` then Enter to save and then `Cntrl + X` to exit the file.
 Now back in the command line refresh the file with:
 
     source ~/.bashrc
