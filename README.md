@@ -41,13 +41,9 @@ Follow these steps in order to set up the environment. *Note: All commands after
 If you're on Windows, enable WSL2 for Linux-based setup. Open PowerShell as Administrator and install Windows Subsystem for Linux:
 ```
 wsl --install
-
 wsl --install -d Ubuntu
-
 wsl --set-default-version 2
-
 sudo apt update && sudo apt upgrade -y
-
 ```
 
 Restart your PC if prompted.
