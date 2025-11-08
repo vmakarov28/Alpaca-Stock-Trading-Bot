@@ -1,6 +1,6 @@
 
 # +------------------------------------------------------------------------------+
-# |                            Alpaca Neural Bot v9.4.1                          |
+# |                            Alpaca Neural Bot v9.5                            |
 # +------------------------------------------------------------------------------+
 # | Author: Vladimir Makarov                                                     |
 # | Project Start Date: May 9, 2025                                              |
@@ -140,7 +140,7 @@ CONFIG = {
 }
 
 #pyenv activate pytorch_env
-#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.4.py --backtest --force-train
+#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.4.2.py --backtest --force-train
 
 
 def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -230,7 +230,7 @@ def load_data(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
     return df
 
 
-
+# Wraps train_symbol call, times execution in ms, unpacks args for parallel processing.
 def train_wrapper(args):
     symbol, expected_features, force_train = args
     start_time_for_training = time.perf_counter()
@@ -257,6 +257,7 @@ logger = logging.getLogger(__name__)
 device = 0 if torch.cuda.is_available() else -1
 sentiment_pipeline = pipeline("sentiment-analysis", model=CONFIG['SENTIMENT_MODEL'], framework="pt", device=device)
 
+# Checks if required libs are installed via importlib, raises ImportError if missing.
 def check_dependencies() -> None:
     """Check for required Python modules."""
     required_modules = [
@@ -269,6 +270,7 @@ def check_dependencies() -> None:
         except ImportError:
             raise ImportError(f"Module '{module}' is required. Install it using: pip install {module}")
 
+# Validates CONFIG types/values like positive ints/floats, raises ValueError on invalid.
 def validate_config(config: Dict) -> None:
     """Validate configuration parameters."""
     if not config['SYMBOLS']:
@@ -282,6 +284,7 @@ def validate_config(config: Dict) -> None:
         if not isinstance(config[param], (int, float)) or config[param] <= 0:
             raise ValueError(f"{param} must be a positive number")
 
+# Creates cache/model dirs, tests write with temp file, logs/errors on fail, raises on model dir issue.
 def create_cache_directory() -> None:
     """Create cache directories if they don't exist and test writability."""
     os.makedirs(CONFIG['CACHE_DIR'], exist_ok=True)
@@ -318,6 +321,8 @@ def create_cache_directory() -> None:
     wait=wait_fixed(CONFIG['API_RETRY_DELAY'] / 1000),
     retry=retry_if_exception_type(Exception)
 )
+
+# Fetches last N bars from Alpaca for live, uses recent dates, renames vwap, sorts, retries on error.
 def fetch_recent_data(symbol: str, num_bars: int) -> pd.DataFrame:
     """Fetch recent bars for live trading."""
     client = StockHistoricalDataClient(CONFIG['ALPACA_API_KEY'], CONFIG['ALPACA_SECRET_KEY'])
@@ -337,6 +342,7 @@ def fetch_recent_data(symbol: str, num_bars: int) -> pd.DataFrame:
     logger.info(f"Fetched {len(df)} recent bars for {symbol}")
     return df.sort_values('timestamp')
 
+# Fetches historical bars in 1yr chunks to avoid limits, handles META/FB rename, concats/dedups, raises on low data.
 def fetch_data(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
     """Fetch historical bar data from Alpaca API in yearly increments."""
     try:
@@ -379,6 +385,7 @@ def fetch_data(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
         logger.error(f"Error fetching data for {symbol}: {str(e)}")
         raise
 
+# Loads from cache if fresh, else fetches full history to now, saves pickle, returns df and loaded flag.
 def load_or_fetch_data(symbol: str, start_date: str, end_date: str) -> Tuple[pd.DataFrame, bool]:
     """Load historical data from cache or fetch from API."""
     cache_file = os.path.join(CONFIG['CACHE_DIR'], f"{symbol}_data.pkl")
@@ -418,6 +425,7 @@ def fetch_recent_data(symbol: str, num_bars: int) -> pd.DataFrame:
     logger.info(f"Fetched {len(df)} recent bars for {symbol}")
     return df.sort_values('timestamp')
 
+# Loads sentiment from cache if fresh, else generates random -1 to 1, saves, returns score and loaded flag.
 def load_news_sentiment(symbol: str) -> Tuple[float, bool]:
     """Compute real-time news sentiment using a pre-trained model or random for testing."""
     cache_file = os.path.join(CONFIG['CACHE_DIR'], f"{symbol}_news_sentiment.pkl")
@@ -431,6 +439,7 @@ def load_news_sentiment(symbol: str) -> Tuple[float, bool]:
             pickle.dump(sentiment_score, f)
         return sentiment_score, False
 
+# Computes TA indicators on copy df, adds sentiment/trend, drops NaNs in indicators.
 def calculate_indicators(df: pd.DataFrame, sentiment: float) -> pd.DataFrame:
     """Calculate technical indicators."""
     df = df.copy()
@@ -1139,7 +1148,17 @@ def format_email_body(
     for symbol, metrics in symbol_results.items():
         body.append(f"\n{symbol}:")
         for metric, value in metrics.items():
-            body.append(f"  {metric.replace('_', ' ').title()}: {value:.3f}%")
+            metric_lower = metric.lower()
+            if 'final_value' in metric_lower:
+                value_str = f"${value:.2f}"
+                unit = ''
+            else:
+                value_str = f"{value:.3f}"
+                if any(k in metric_lower for k in ['return', 'drawdown', 'var', 'prob']):
+                    unit = '%'
+                else:
+                    unit = ''
+            body.append(f"  {metric.replace('_', ' ').title()}: {value_str}{unit}")
         body.append(f"  Trades: {trade_counts.get(symbol, 0)}")
         body.append(f"  Win Rate: {win_rates.get(symbol, 0.0):.3f}%")
     return "\n".join(body)
@@ -1625,7 +1644,7 @@ Portfolio Value: ${portfolio_value:.2f}
         for symbol in CONFIG['SYMBOLS']:
             dfs_backtest[symbol]['Future_Direction'] = (dfs_backtest[symbol]['close'].shift(-CONFIG['LOOK_AHEAD_BARS']) > dfs_backtest[symbol]['close']).astype(int)
 
-        attempt_results = []
+        attempt_results = [] # Runs fixed retrain attempts, collects results, selects best by final_value, copies best models/scalers to standard paths.
         if CONFIG['ENABLE_RETRAIN_CYCLE'] and force_train:
             effective_max = CONFIG['MAX_RETRAIN_ATTEMPTS']
         else:
