@@ -1,11 +1,11 @@
 
 # +------------------------------------------------------------------------------+
-# |                            Alpaca Neural Bot v9.8.0                          |
+# |                            Alpaca Neural Bot v9.9.0                          |
 # +------------------------------------------------------------------------------+
 # | Author: Vladimir Makarov                                                     |
 # | Project Start Date: May 9, 2025                                              |
 # | License: GNU Lesser General Public License v2.1                              |
-# | Version: 9.8.0 (Un-Released)                                                 |
+# | Version: 9.9.0 (Un-Released)                                                 |
 # +------------------------------------------------------------------------------+
 
 import os  # For operating system interactions, like creating directories and handling file paths
@@ -34,7 +34,6 @@ import talib  # For technical analysis library, providing indicators like RSI, M
 import pickle  # For serializing/deserializing objects like models, scalers, and data caches
 from typing import List, Tuple, Dict, Optional, Any  # For type hinting in function signatures and variables
 import warnings  # For suppressing or handling warnings, like PyTorch user warnings
-import time  # For time-related functions, like sleeping or timing operations
 from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type  # For retry decorators on API calls to handle failures
 from tqdm import tqdm  # For displaying progress bars during training and data processing
 from colorama import Fore, Style  # For colored text styles in console output
@@ -56,9 +55,9 @@ colorama.init()
 
 CONFIG = {
     # Trading Parameters - Settings related to trading operations
-    'SYMBOLS': [ 'AAPL', 'NVDA', 'GOOGL'],  # List of stock symbols to trade
+    'SYMBOLS': [ 'AAPL', 'NVDA', 'GOOGL', 'TSLA', 'META', 'AMZN', 'SPY'],  # List of stock symbols to trade
     'TIMEFRAME': TimeFrame(15, TimeFrameUnit.Minute),  # Time interval for data fetching
-    'INITIAL_CASH': 1000.00,  # Starting cash for trading simulation
+    'INITIAL_CASH': 100000.00,  # Starting cash for trading simulation
     'MIN_HOLDING_PERIOD_MINUTES': 45,  # Minimum holding period for trades
 
     # Data Fetching and Caching - Parameters for data retrieval and storage (format: yy/mm/dd)
@@ -76,7 +75,7 @@ CONFIG = {
     'LIVE_DATA_BARS': 500,  # Number of bars to fetch for live data
 
     # Model Training - Settings for training the machine learning model
-    'TRAIN_EPOCHS': 100,  # Number of epochs for training the model
+    'TRAIN_EPOCHS': 200,  # Number of epochs for training the model
     'BATCH_SIZE': 32,  # Batch size for training
     'TIMESTEPS': 30,  # Number of time steps for sequence data
     'EARLY_STOPPING_MONITOR': 'val_loss',  # Metric to monitor for early stopping
@@ -127,16 +126,16 @@ CONFIG = {
     # API Retry Settings - Configuration for handling API failures
     'API_RETRY_ATTEMPTS': 3,  # Number of retry attempts for API calls
     'API_RETRY_DELAY': 1000,  # Delay between retry attempts in milliseconds
-    'MODEL_VERSION': 'v935',  # Model architecture version; increment on structural changes to force retrain
+    'MODEL_VERSION': 'v10',  # Model architecture version; increment on structural changes to force retrain
 
     # New: Retraining Cycle Parameters
     'ENABLE_RETRAIN_CYCLE': True,  # Enable loop to retrain until criteria met (backtest mode only)
     'MIN_FINAL_VALUE': 130000.0,  # Minimum final portfolio value to accept
     'MAX_ALLOWED_DRAWDOWN': 35.0,  # Maximum allowed max_drawdown percentage (across symbols)
-    'MAX_RETRAIN_ATTEMPTS': 25,  # Max loop iterations to prevent infinite runs
+    'MAX_RETRAIN_ATTEMPTS': 3,  # Max loop iterations to prevent infinite runs
 
     #Monte Carlo Probability Simulation
-    'NUM_MC_SIMULATIONS': 50000,  # Number of Monte Carlo simulations for backtest robustness testing
+    'NUM_MC_SIMULATIONS': 500000,  # Number of Monte Carlo simulations for backtest robustness testing
 }
 
 #pyenv activate pytorch_env
@@ -1846,48 +1845,58 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
                 'accuracies_dictionary': accuracies_dictionary
             })
 
-        # After all attempts, select and use the best (highest final_value)
+        # After all attempts, select the best model per symbol based on highest total_return for that symbol
         if attempt_results:
-            best = max(attempt_results, key=lambda x: x['final_value'])
-            best_attempt = best['attempt']
-            logger.info(f"Selected best attempt {best_attempt} with final_value ${best['final_value']:.2f}")
-
-            # Copy best attempt's files to standard paths
+            best_attempt_per_symbol = {}
+            best_symbol_results = {}
+            best_trade_counts = {}
+            best_win_rates = {}
+            best_accuracies = {}
+            # Use the last attempt's bh_final_value (consistent across attempts)
+            bh_final_value = attempt_results[-1]['bh_final_value']
+            final_value = 0.0
+            initial_per_symbol = CONFIG['INITIAL_CASH'] / len(CONFIG['SYMBOLS'])
             for symbol in CONFIG['SYMBOLS']:
-                attempt_model_path = os.path.join(CONFIG['MODEL_CACHE_DIR'], f"{symbol}_model_{CONFIG['MODEL_VERSION']}_attempt{best_attempt}.pth")
-                attempt_scaler_path = os.path.join(CONFIG['MODEL_CACHE_DIR'], f"{symbol}_scaler_{CONFIG['MODEL_VERSION']}_attempt{best_attempt}.pkl")
+                # Find attempt with max total_return for this symbol
+                best_att_for_sym = max(attempt_results, key=lambda x: x['symbol_results'].get(symbol, {}).get('total_return', -float('inf')))['attempt']
+                best_attempt_per_symbol[symbol] = best_att_for_sym
+                # Get the results from that attempt for this symbol
+                best_att_results = next(a for a in attempt_results if a['attempt'] == best_att_for_sym)
+                best_symbol_results[symbol] = best_att_results['symbol_results'][symbol]
+                best_trade_counts[symbol] = best_att_results['trade_counts'][symbol]
+                best_win_rates[symbol] = best_att_results['win_rates'][symbol]
+                best_accuracies[symbol] = best_att_results['accuracies_dictionary'][symbol]
+                # Compute per-symbol cash and add to overall
+                sym_cash = initial_per_symbol * (1 + best_symbol_results[symbol]['total_return'] / 100)
+                final_value += sym_cash
+                # Copy best model/scaler for this symbol to standard path
+                attempt_model_path = os.path.join(CONFIG['MODEL_CACHE_DIR'], f"{symbol}_model_{CONFIG['MODEL_VERSION']}_attempt{best_att_for_sym}.pth")
+                attempt_scaler_path = os.path.join(CONFIG['MODEL_CACHE_DIR'], f"{symbol}_scaler_{CONFIG['MODEL_VERSION']}_attempt{best_att_for_sym}.pkl")
                 model_path = os.path.join(CONFIG['MODEL_CACHE_DIR'], f"{symbol}_model_{CONFIG['MODEL_VERSION']}.pth")
                 scaler_path = os.path.join(CONFIG['MODEL_CACHE_DIR'], f"{symbol}_scaler_{CONFIG['MODEL_VERSION']}.pkl")
                 if os.path.exists(attempt_model_path):
                     shutil.copyfile(attempt_model_path, model_path)
-                    logger.info(f"Copied best model for {symbol} from attempt {best_attempt} to standard path")
+                    logger.info(f"Copied best model for {symbol} from attempt {best_att_for_sym} to standard path")
                 else:
-                    logger.warning(f"Model file for {symbol} attempt {best_attempt} not found")
+                    logger.warning(f"Model file for {symbol} attempt {best_att_for_sym} not found")
                 if os.path.exists(attempt_scaler_path):
                     shutil.copyfile(attempt_scaler_path, scaler_path)
-                    logger.info(f"Copied best scaler for {symbol} from attempt {best_attempt} to standard path")
+                    logger.info(f"Copied best scaler for {symbol} from attempt {best_att_for_sym} to standard path")
                 else:
-                    logger.warning(f"Scaler file for {symbol} attempt {best_attempt} not found")
-
-            # Set variables from best for reporting
-            final_value = best['final_value']
-            symbol_results = best['symbol_results']
-            trade_counts = best['trade_counts']
-            win_rates = best['win_rates']
-            bh_final_value = best['bh_final_value']
-            training_times_dictionary = best['training_times_dictionary']
-            backtest_times_dictionary = best['backtest_times_dictionary']
-            total_training_time_in_milliseconds = best['total_training_time_in_milliseconds']
-            total_backtest_time_in_milliseconds = best['total_backtest_time_in_milliseconds']
-            accuracies_dictionary = best['accuracies_dictionary']
-
+                    logger.warning(f"Scaler file for {symbol} attempt {best_att_for_sym} not found")
+            logger.info(f"Selected best models per symbol: {best_attempt_per_symbol}")
+            # Use the last attempt's times (or average if desired; here using last for simplicity)
+            training_times_dictionary = attempt_results[-1]['training_times_dictionary']
+            backtest_times_dictionary = attempt_results[-1]['backtest_times_dictionary']
+            total_training_time_in_milliseconds = attempt_results[-1]['total_training_time_in_milliseconds']
+            total_backtest_time_in_milliseconds = attempt_results[-1]['total_backtest_time_in_milliseconds']
             # Reporting (updated with buy-and-hold)
-            email_body = format_email_body(CONFIG['INITIAL_CASH'], final_value, symbol_results, trade_counts, win_rates)
-            email_body += f"\nBest Attempt: {best_attempt}"
+            email_body = format_email_body(CONFIG['INITIAL_CASH'], final_value, best_symbol_results, best_trade_counts, best_win_rates)
+            email_body += f"\nBest Models Per Symbol: {', '.join(f'{sym} from attempt {best_attempt_per_symbol[sym]}' for sym in CONFIG['SYMBOLS'])}"
             email_body += "\n\nMonte Carlo Simulation Summary (per symbol):\n"
             for symbol in CONFIG['SYMBOLS']:
-                if symbol in symbol_results:
-                    mc = symbol_results[symbol]
+                if symbol in best_symbol_results:
+                    mc = best_symbol_results[symbol]
                     email_body += f"{symbol}: MC Mean Final: ${mc['mc_mean_final_value']:.2f}, MC Median Final: ${mc['mc_median_final_value']:.2f}, MC 95% VaR: {mc['mc_var_95']:.3f}%, MC Prob Profit: {mc['mc_prob_profit']:.3f}%\n"
             email_body += f"\nBuy-and-Hold Final Value: ${bh_final_value:.2f}\nDay Trading {'beats' if final_value > bh_final_value else 'does not beat'} Buy-and-Hold."
             send_email("Backtest Completed - Best Results", email_body)
@@ -1911,27 +1920,27 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
             print(f"Total Time (Training + Backtest): {format_time(total_training_time_in_milliseconds + total_backtest_time_in_milliseconds)}")
 
             print(f"{Fore.GREEN}Backtest Performance Summary:{Style.RESET_ALL}")
-            print(f"{'Symbol':<8} {'Total Return (%)':<18} {'Sharpe Ratio':<14} {'Max Drawdown (%)':<20} {'Trades':<8} {'Win Rate (%)':<14} {'Accuracy (%)':<14} {'MC Mean Final ($)':<18} {'MC Median Final ($)':<20} {'MC 95% VaR (%)':<15} {'MC Prob Profit (%)':<18}")
+            print(f"{'Symbol':<8} {'Attempt':<8} {'Total Return (%)':<18} {'Sharpe Ratio':<14} {'Max Drawdown (%)':<20} {'Trades':<8} {'Win Rate (%)':<14} {'Accuracy (%)':<14} {'MC Mean Final ($)':<18} {'MC Median Final ($)':<20} {'MC 95% VaR (%)':<15} {'MC Prob Profit (%)':<18}")
             for symbol in CONFIG['SYMBOLS']:
-                if symbol in symbol_results:
-                    metrics_for_symbol = symbol_results[symbol]
+                if symbol in best_symbol_results:
+                    metrics_for_symbol = best_symbol_results[symbol]
+                    attempt = best_attempt_per_symbol[symbol]
                     return_color = Fore.GREEN if metrics_for_symbol['total_return'] > 0 else Fore.RED
                     drawdown_color = Fore.RED if metrics_for_symbol['max_drawdown'] > 0 else Fore.GREEN
-                    win_rate_color = Fore.GREEN if win_rates[symbol] > 50 else Fore.RED
-                    accuracy = accuracies_dictionary.get(symbol, 0) if trade_counts.get(symbol, 0) > 0 else 0.0  # Hide accuracy if no trades
+                    win_rate_color = Fore.GREEN if best_win_rates[symbol] > 50 else Fore.RED
+                    accuracy = best_accuracies[symbol] if best_trade_counts[symbol] > 0 else 0.0  # Hide accuracy if no trades
                     accuracy_color = Fore.GREEN if accuracy > 50 else Fore.RED
                     mc_mean_color = Fore.GREEN if metrics_for_symbol['mc_mean_final_value'] > initial_per_symbol else Fore.RED
                     mc_median_color = Fore.GREEN if metrics_for_symbol['mc_median_final_value'] > initial_per_symbol else Fore.RED
                     mc_var_color = Fore.RED if metrics_for_symbol['mc_var_95'] > 0 else Fore.GREEN
                     mc_prob_color = Fore.GREEN if metrics_for_symbol['mc_prob_profit'] > 50 else Fore.RED
-                    print(f"{symbol:<8} {return_color}{metrics_for_symbol['total_return']:<18.3f}{Style.RESET_ALL} {metrics_for_symbol['sharpe_ratio']:<14.3f} {drawdown_color}{metrics_for_symbol['max_drawdown']:<20.3f}{Style.RESET_ALL} {trade_counts.get(symbol, 0):<8} {win_rate_color}{win_rates.get(symbol, 0):<14.3f}{Style.RESET_ALL} {accuracy_color}{accuracy:<14.3f}{Style.RESET_ALL} {mc_mean_color}{metrics_for_symbol['mc_mean_final_value']:<18.2f}{Style.RESET_ALL} {mc_median_color}{metrics_for_symbol['mc_median_final_value']:<20.2f}{Style.RESET_ALL} {mc_var_color}{metrics_for_symbol['mc_var_95']:<15.3f}{Style.RESET_ALL} {mc_prob_color}{metrics_for_symbol['mc_prob_profit']:<18.3f}{Style.RESET_ALL}")
+                    print(f"{symbol:<8} {attempt:<8} {return_color}{metrics_for_symbol['total_return']:<18.3f}{Style.RESET_ALL} {metrics_for_symbol['sharpe_ratio']:<14.3f} {drawdown_color}{metrics_for_symbol['max_drawdown']:<20.3f}{Style.RESET_ALL} {best_trade_counts.get(symbol, 0):<8} {win_rate_color}{best_win_rates.get(symbol, 0):<14.3f}{Style.RESET_ALL} {accuracy_color}{accuracy:<14.3f}{Style.RESET_ALL} {mc_mean_color}{metrics_for_symbol['mc_mean_final_value']:<18.2f}{Style.RESET_ALL} {mc_median_color}{metrics_for_symbol['mc_median_final_value']:<20.2f}{Style.RESET_ALL} {mc_var_color}{metrics_for_symbol['mc_var_95']:<15.3f}{Style.RESET_ALL} {mc_prob_color}{metrics_for_symbol['mc_prob_profit']:<18.3f}{Style.RESET_ALL}")
 
             bh_color = Fore.GREEN if CONFIG['INITIAL_CASH'] < bh_final_value else Fore.RED
             print(f"\nBuy-and-Hold Final Value: {bh_color}${bh_final_value:.2f}{Style.RESET_ALL}")
             print(f"Day Trading {'beats' if final_value > bh_final_value else 'does not beat'} Buy-and-Hold.")
             color = Fore.RED if final_value <= CONFIG['INITIAL_CASH'] else Fore.GREEN
             print(f"\nBacktest completed: Final value: {color}${final_value:.2f}{Style.RESET_ALL}")
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Trading bot with backtest mode")
