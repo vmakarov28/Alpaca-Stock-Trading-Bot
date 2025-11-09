@@ -1,11 +1,11 @@
 
 # +------------------------------------------------------------------------------+
-# |                            Alpaca Neural Bot v9.7.5                          |
+# |                            Alpaca Neural Bot v9.8.0                          |
 # +------------------------------------------------------------------------------+
 # | Author: Vladimir Makarov                                                     |
 # | Project Start Date: May 9, 2025                                              |
 # | License: GNU Lesser General Public License v2.1                              |
-# | Version: 9.7.5 (Un-Released)                                                 |
+# | Version: 9.8.0 (Un-Released)                                                 |
 # +------------------------------------------------------------------------------+
 
 import os  # For operating system interactions, like creating directories and handling file paths
@@ -56,17 +56,17 @@ colorama.init()
 
 CONFIG = {
     # Trading Parameters - Settings related to trading operations
-    'SYMBOLS': ['SPY', 'MSFT', 'AAPL', 'AMZN', 'NVDA', 'META', 'GOOGL'],  # List of stock symbols to trade
+    'SYMBOLS': [ 'AAPL', 'NVDA', 'GOOGL'],  # List of stock symbols to trade
     'TIMEFRAME': TimeFrame(15, TimeFrameUnit.Minute),  # Time interval for data fetching
-    'INITIAL_CASH': 100000.00,  # Starting cash for trading simulation
+    'INITIAL_CASH': 1000.00,  # Starting cash for trading simulation
     'MIN_HOLDING_PERIOD_MINUTES': 45,  # Minimum holding period for trades
 
-    # Data Fetching and Caching - Parameters for data retrieval and storage
+    # Data Fetching and Caching - Parameters for data retrieval and storage (format: yy/mm/dd)
     'TRAIN_DATA_START_DATE': '2015-01-01',  # Start date for training data
     'TRAIN_END_DATE': '2024-06-30',  # End date for training data (extended to include more recent data)
     'VAL_START_DATE': '2024-07-01',  # Start date for validation data (shifted for recent validation)
-    'VAL_END_DATE': '2025-09-01',  # End date for validation data (include up to recent date for better generalization)
-    'BACKTEST_START_DATE': '2025-01-01',  # Start date for backtesting (out-of-sample)
+    'VAL_END_DATE': '2024-12-31',  # End date for validation data (now ends before backtest to prevent overlap/leakage)
+    'BACKTEST_START_DATE': '2025-01-01',  # Start date for backtesting (out-of-sample, now fully after val)
 
     'SIMULATION_DAYS': 180,  # Number of days for simulation
     'MIN_DATA_POINTS': 100,  # Minimum data points required for processing
@@ -1926,10 +1926,10 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
                     mc_prob_color = Fore.GREEN if metrics_for_symbol['mc_prob_profit'] > 50 else Fore.RED
                     print(f"{symbol:<8} {return_color}{metrics_for_symbol['total_return']:<18.3f}{Style.RESET_ALL} {metrics_for_symbol['sharpe_ratio']:<14.3f} {drawdown_color}{metrics_for_symbol['max_drawdown']:<20.3f}{Style.RESET_ALL} {trade_counts.get(symbol, 0):<8} {win_rate_color}{win_rates.get(symbol, 0):<14.3f}{Style.RESET_ALL} {accuracy_color}{accuracy:<14.3f}{Style.RESET_ALL} {mc_mean_color}{metrics_for_symbol['mc_mean_final_value']:<18.2f}{Style.RESET_ALL} {mc_median_color}{metrics_for_symbol['mc_median_final_value']:<20.2f}{Style.RESET_ALL} {mc_var_color}{metrics_for_symbol['mc_var_95']:<15.3f}{Style.RESET_ALL} {mc_prob_color}{metrics_for_symbol['mc_prob_profit']:<18.3f}{Style.RESET_ALL}")
 
-            bh_color = Fore.GREEN if final_value > bh_final_value else Fore.RED
+            bh_color = Fore.GREEN if CONFIG['INITIAL_CASH'] < bh_final_value else Fore.RED
             print(f"\nBuy-and-Hold Final Value: {bh_color}${bh_final_value:.2f}{Style.RESET_ALL}")
             print(f"Day Trading {'beats' if final_value > bh_final_value else 'does not beat'} Buy-and-Hold.")
-            color = Fore.RED if final_value <= 100000 else Fore.GREEN
+            color = Fore.RED if final_value <= CONFIG['INITIAL_CASH'] else Fore.GREEN
             print(f"\nBacktest completed: Final value: {color}${final_value:.2f}{Style.RESET_ALL}")
 
 
