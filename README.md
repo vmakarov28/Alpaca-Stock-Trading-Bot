@@ -273,12 +273,11 @@ Troubleshooting:
 - Save the script.
 
 ## Step 10: Running the Script
-
 Activate virtual environment:
 
     pyenv activate pytorch_env
 
-Run backtest with force-train:
+Run backtest with force-train(You can download already trained models & scalars, put them in a folder, amd put the adress into the 'Config':
 
     python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v6.7.py --backtest --force-train
 
