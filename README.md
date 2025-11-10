@@ -1,11 +1,11 @@
-# Alpaca Stock Trading Bot
+# Alpaca Stock Trading System
 
-Alpaca Neural Bot v10.0.0 is an advanced AI-powered stock trading bot that uses a CNN-LSTM neural network built with PyTorch to predict market trends and execute trades via the Alpaca API, optimized for GPU acceleration on NVIDIA RTX 5080. It incorporates technical indicators from TA-Lib (such as RSI, MACD, ATR, and ADX), sentiment analysis via Hugging Face Transformers, and robust risk management features including ATR-based stops, trailing stops, drawdown limits, volatility filters, and minimum holding periods. The bot supports comprehensive backtesting with metrics like Sharpe ratio, max drawdown, Monte Carlo simulations, and buy-and-hold benchmarks on historical data from 2015 to the current date (November 08, 2025), alongside live paper trading with email notifications and multiprocessing for efficient training across multiple symbols.
+Alpaca Neural Bot v10.0.0 is an advanced AI-powered stock trading bot that uses a CNN-LSTM neural network built with PyTorch to predict market trends and execute trades via the Alpaca API, optimized for GPU acceleration on NVIDIA RTX 5080. It incorporates technical indicators from TA-Lib (such as RSI, MACD, ATR, and ADX), sentiment analysis via Hugging Face Transformers, and robust risk management features including ATR-based stops, trailing stops, drawdown limits, volatility filters, and minimum holding periods. The bot supports comprehensive backtesting with metrics like Sharpe ratio, max drawdown, Monte Carlo simulations, and buy-and-hold benchmarks on historical data from 2015 to the current date (November 09, 2025), alongside live paper trading with email notifications and multiprocessing for efficient training across multiple symbols.
 
-## Key capabilities
+## System Overview
 - **Neural Network Prediction:** Employs a CNN-LSTM model (Conv1D layers followed by LSTM) to predict future price directions over LOOK_AHEAD_BARS (7 bars) based on 30-timestep sequences of 23 features from historical and real-time data.
 
-- Model Training: Trains the CNN-LSTM model per symbol using Adam optimizer (learning rate 0.001), BCEWithLogitsLoss, early stopping, and ReduceLROnPlateau scheduler (patience 5, factor 0.5) over customizable epochs with customizable batch size; supports data augmentation via noise addition; in backtest mode, enables an automated retraining cycle (up to X attempts) that retrains until performance criteria are met, then selects and copies the best attempt's models/scalers.
+- Model Training: Trains the CNN-LSTM model per symbol using Adam optimizer (learning rate 0.001), BCEWithLogitsLoss, early stopping, and ReduceLROnPlateau scheduler (patience 5, factor 0.5) over customizable epochs with customizable batch size; supports data augmentation via noise addition; in backtest mode, enables an automated retraining cycle (up to X attempts) that retrains until performance criteria are met, then selects and copies the best attempt's models/scalers across all attempts.
 
 - **Backtesting:** Simulates trades across multiple symbols between a specifyable data, and today. Includes transaction costs, ATR-based stops/profits, min holding periods, performance metrics (Sharpe ratio, max drawdown, win rates, accuracies), Monte Carlo simulations (50,000 runs), buy-and-hold benchmarks. 
 
@@ -15,20 +15,22 @@ Alpaca Neural Bot v10.0.0 is an advanced AI-powered stock trading bot that uses 
 
 - **GPU Acceleration:** Leverages PyTorch with CUDA for accelerated training and inference on RTX 5080, including memory management via torch.cuda.empty_cache() after parallel sessions.
 
-- **Sentiment Analysis:** Has a framework to utilizes DistilBERT (distilbert-base-uncased-finetuned-sst-2-english) via Hugging Face Transformers for news sentiment scoring, currently defualts to netural
+- **Sentiment Analysis:** Has a framework to utilizes DistilBERT (distilbert-base-uncased-finetuned-sst-2-english) via Hugging Face Transformers for news sentiment scoring, currently defaults to netural. (A simulated place holder)
 
 - **Free Tier Compatible:** Optimized for Alpaca's free API tier with retry logic (3 attempts, 1-second delay), data caching (24-hour expiry), and rate-limit handling via tenacity.
 
-***This bot is for educational and testing purposes only. Use paper trading to avoid financial risk.***
+Disclaimer: ***It is HIGHLY recommened to use this for educational purposes only. Use paper trading to avoid real financial risk.***
 
 
 # Installation Steps
-Follow these steps in order to set up the environment. *Note: All commands after steo 2 are for WSL/Ubuntu terminal.*
+Follow these steps in order to set up the environment. 
+
+*Note: All commands after step 2 are for WSL/Ubuntu terminal.*
 
 ## Prerequisites
 
 - Drivers: Install the latest nvidia drivers from nvdia app along with Cuda 12.8 and cuDNN.
-- Hardware: NVIDIA GPU with at least 16GB VRAM for efficient training. (Confirmed to work propperly on RTX 5080 but other 50 series and 40 series card are likley to work).
+- Hardware: NVIDIA GPU with at least 16GB VRAM for efficient training. (Confirmed to work properly on RTX 5080 but other 50 series and 40 series card are likely to work).
 - Operating System: Windows Subsystem for Linux (WSL2) on Windows 10/11, or native Ubuntu 22.04+.
 - Alpaca Account: Free account with paper trading enabled. Get API keys from Alpaca Dashboard.
 - Gmail Account: For email notifications (enable "Less secure app access" or use app password).
@@ -55,7 +57,7 @@ Restart your PC after successful installation.
 ## Step 2: Install pyenv for Python Management
 *********\*\***From now on the rest of the steps will be completed in wsl*\*\***********
 
-Pyenv allows isolated Python environments.
+We use Pyenv because it allows isolated Python environments.
 
 ### Install dependencies for Pyenv:
 Use this command:
@@ -308,6 +310,6 @@ GNU Lesser General Public License v2.1. See LICENSE for details.
 
 Author: Vladimir Makarov
 
-Most reacent change: 11/08/25
+Most recent change: 11/09/2025
 
 GitHub: vmakarov28/Alpaca-Stock-Trading-Bot
