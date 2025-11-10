@@ -29,12 +29,12 @@ Follow these steps in order to set up the environment.
 
 ## Prerequisites
 
-- Drivers: Install the latest nvidia drivers from nvdia app along with Cuda 12.8 and cuDNN.
+- Drivers: Install the latest nvidia drivers from nvdia app for your GPU.
 - Hardware: NVIDIA GPU with at least 16GB VRAM for efficient training. (Confirmed to work properly on RTX 5080 but other 50 series and 40 series card are likely to work).
-- Operating System: Windows Subsystem for Linux (WSL2) on Windows 10/11, or native Ubuntu 22.04+.
+- Operating System: Windows Subsystem for Linux (WSL2) on Windows 11 or Native Ubuntu 22.04+
 - Alpaca Account: Free account with paper trading enabled. Get API keys from Alpaca Dashboard.
 - Gmail Account: For email notifications (enable "Less secure app access" or use app password).
-- Internet: Stable connection for API calls (no VPN recommended to avoid rate limits).
+- Internet: Stable connection for API calls (VPN is not recommended due to possible rate limits).
 
 
 
