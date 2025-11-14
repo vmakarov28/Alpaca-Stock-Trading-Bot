@@ -29,12 +29,12 @@ Follow these steps in order to set up the environment.
 
 ## Prerequisites
 
-- Drivers: Install the latest nvidia drivers from nvdia app along with Cuda 12.8 and cuDNN.
+- Drivers: Install the latest nvidia drivers from nvdia app for your GPU.
 - Hardware: NVIDIA GPU with at least 16GB VRAM for efficient training. (Confirmed to work properly on RTX 5080 but other 50 series and 40 series card are likely to work).
-- Operating System: Windows Subsystem for Linux (WSL2) on Windows 10/11, or native Ubuntu 22.04+.
+- Operating System: Windows Subsystem for Linux (WSL2) on Windows 11 or Native Ubuntu 22.04+
 - Alpaca Account: Free account with paper trading enabled. Get API keys from Alpaca Dashboard.
 - Gmail Account: For email notifications (enable "Less secure app access" or use app password).
-- Internet: Stable connection for API calls (no VPN recommended to avoid rate limits).
+- Internet: Stable connection for API calls (VPN is not recommended due to possible rate limits).
 
 
 
@@ -273,12 +273,12 @@ Troubleshooting:
 - Save the script.
 
 ## Step 10: Running the Script
-
+*Note:* If you do not want to train your own models / scalars, You can download already trained models & scalars, put them in a folder, amd put the address into the 'Config':
 Activate virtual environment:
 
     pyenv activate pytorch_env
 
-Run backtest with force-train:
+Run backtest with force-train
 
     python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v6.7.py --backtest --force-train
 
@@ -310,6 +310,6 @@ GNU Lesser General Public License v2.1. See LICENSE for details.
 
 Author: Vladimir Makarov
 
-Most recent change: 11/09/2025
+Most recent change: 11/14/2025
 
 GitHub: vmakarov28/Alpaca-Stock-Trading-Bot
