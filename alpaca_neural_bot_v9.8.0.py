@@ -1,11 +1,11 @@
 
 # +------------------------------------------------------------------------------+
-# |                            Alpaca Neural Bot v9.9.0                          |
+# |                            Alpaca Neural Bot v9.9.2                          |
 # +------------------------------------------------------------------------------+
 # | Author: Vladimir Makarov                                                     |
 # | Project Start Date: May 9, 2025                                              |
 # | License: GNU Lesser General Public License v2.1                              |
-# | Version: 9.9.0 (Un-Released)                                                 |
+# | Version: 9.9.2 (Un-Released)                                                 |
 # +------------------------------------------------------------------------------+
 
 import os  # For operating system interactions, like creating directories and handling file paths
@@ -55,7 +55,7 @@ colorama.init()
 
 CONFIG = {
     # Trading Parameters - Settings related to trading operations
-    'SYMBOLS': [ 'AAPL', 'NVDA', 'GOOGL', 'TSLA', 'META', 'AMZN', 'SPY'],  # List of stock symbols to trade
+    'SYMBOLS': [ 'AAPL', 'NVDA', 'GOOGL', 'META', 'AMZN', 'SPY'],  # List of stock symbols to trade
     'TIMEFRAME': TimeFrame(15, TimeFrameUnit.Minute),  # Time interval for data fetching
     'INITIAL_CASH': 100000.00,  # Starting cash for trading simulation
     'MIN_HOLDING_PERIOD_MINUTES': 45,  # Minimum holding period for trades
@@ -124,22 +124,22 @@ CONFIG = {
     'SENTIMENT_MODEL': 'distilbert-base-uncased-finetuned-sst-2-english',  # Model for sentiment analysis
 
     # API Retry Settings - Configuration for handling API failures
-    'API_RETRY_ATTEMPTS': 3,  # Number of retry attempts for API calls
+    'API_RETRY_ATTEMPTS': 10,  # Number of retry attempts for API calls
     'API_RETRY_DELAY': 1000,  # Delay between retry attempts in milliseconds
-    'MODEL_VERSION': 'v10',  # Model architecture version; increment on structural changes to force retrain
+    'MODEL_VERSION': 'v100',  # Model architecture version; increment on structural changes to force retrain
 
     # New: Retraining Cycle Parameters
     'ENABLE_RETRAIN_CYCLE': True,  # Enable loop to retrain until criteria met (backtest mode only)
     'MIN_FINAL_VALUE': 130000.0,  # Minimum final portfolio value to accept
     'MAX_ALLOWED_DRAWDOWN': 35.0,  # Maximum allowed max_drawdown percentage (across symbols)
-    'MAX_RETRAIN_ATTEMPTS': 3,  # Max loop iterations to prevent infinite runs
+    'MAX_RETRAIN_ATTEMPTS': 50,  # Max loop iterations to prevent infinite runs
 
     #Monte Carlo Probability Simulation
     'NUM_MC_SIMULATIONS': 500000,  # Number of Monte Carlo simulations for backtest robustness testing
 }
 
 #pyenv activate pytorch_env
-#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.6.0.py --backtest --force-train
+#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.9.0.py --backtest --force-train
 
 
 def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -713,8 +713,8 @@ def train_model(symbol: str, df: pd.DataFrame, epochs: int, batch_size: int, tim
                     logger.info(f"Removed temp best model file for {symbol}")
                 except Exception as e:
                     logger.warning(f"Failed to remove temp file {temp_best_path}: {str(e)}")
-        else:
-            logger.warning(f"No temp best model file found for {symbol}; using final model state (no improvements during training?).")
+#        else:
+#            logger.warning(f"No temp best model file found for {symbol}; using final model state (no improvements during training?).")
     with open(os.path.join(CONFIG['CACHE_DIR'], f"{symbol}_scaler.pkl"), 'wb') as f:
         pickle.dump(scaler, f)  # Cache scaler for inference consistency
     return model, scaler
@@ -1308,7 +1308,7 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
                 time.sleep(60) # Wait 1 min before next loop iteration to avoid spamming
                 continue
             if clock.is_open:  # Only trade when market is open
-                now = datetime.now()  # Current time for scheduling
+                now = datetime.now(timezone.utc)  # Current time for scheduling (ensure timezone-aware for calculations)
                 next_mark = now.replace(second=0, microsecond=0)  # Align to next 15-min mark for bar intervals
                 minutes = now.minute
                 if minutes % 15 != 0:
@@ -1427,22 +1427,25 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
                             decision = "Hold (Low Confidence)"
                         elif prediction > max(CONFIG['PREDICTION_THRESHOLD_BUY'], CONFIG['CONFIDENCE_THRESHOLD']) and current_rsi < CONFIG['RSI_BUY_THRESHOLD']:
                             decision = "Buy"
-                            if atr_val > 0:  # Valid ATR required for sizing
-                                risk_per_trade = cash * (CONFIG['RISK_PERCENTAGE'] / 100)
-                                stop_loss_distance = atr_val * CONFIG['STOP_LOSS_ATR_MULTIPLIER']
-                                qty = max(1, int(risk_per_trade / stop_loss_distance))  # Risk-adjusted qty
-                                cost = qty * price + CONFIG['TRANSACTION_COST_PER_TRADE']
-                                if cost <= cash:
-                                    logger.info(f"Submitting buy order for {qty} shares of {symbol} at ${price:.2f}")
-                                    order = MarketOrderRequest(
-                                        symbol=symbol,
-                                        qty=qty,
-                                        side=OrderSide.BUY,
-                                        time_in_force=TimeInForce.GTC  # Good 'til canceled
-                                    )
-                                    try:
-                                        trading_client.submit_order(order)  # Submit market buy
-                                        email_body = f"""
+                            if atr_val > 0:
+                                try:
+                                    risk_per_trade = cash * CONFIG['RISK_PERCENTAGE']  # Remove /100 for correct fraction (e.g., 0.06 = 6%)
+                                    stop_loss_distance = atr_val * CONFIG['STOP_LOSS_ATR_MULTIPLIER']
+                                    if stop_loss_distance <= 0:
+                                        raise ValueError("Stop loss distance <= 0")
+                                    qty = max(1, int(risk_per_trade / stop_loss_distance))  # Ensure qty >=1
+                                    cost = qty * price + CONFIG['TRANSACTION_COST_PER_TRADE']
+                                    if cost <= cash:
+                                        logger.info(f"Submitting buy order for {qty} shares of {symbol} at ${price:.2f}")
+                                        order = MarketOrderRequest(
+                                            symbol=symbol,
+                                            qty=qty,
+                                            side=OrderSide.BUY,
+                                            time_in_force=TimeInForce.GTC
+                                        )
+                                        try:
+                                            trading_client.submit_order(order)
+                                            email_body = f"""
                         Bought {qty} shares of {symbol} at ${price:.2f}
                         Prediction Confidence: {prediction:.3f}
                         RSI: {current_rsi:.2f}
@@ -1452,11 +1455,11 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
                         Current Cash: ${cash - cost:.2f}
                         Portfolio Value: ${portfolio_value:.2f}
                         """
-                                        send_email(f"Trade Update: Bought {symbol}", email_body)  # Notify on success
-                                    except Exception as e:
-                                        logger.error(f"Failed to submit buy order for {symbol}: {str(e)}")
-                                        decision = "Buy (Failed)"
-                                        email_body = f"""
+                                            send_email(f"Trade Update: Bought {symbol}", email_body)
+                                        except Exception as e:
+                                            logger.error(f"Failed to submit buy order for {symbol}: {str(e)}")
+                                            decision = "Buy (Failed)"
+                                            email_body = f"""
                         Failed to buy {qty} shares of {symbol} at ${price:.2f}
                         Error: {str(e)}
                         Prediction Confidence: {prediction:.3f}
@@ -1467,55 +1470,13 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
                         Current Cash: ${cash:.2f}
                         Portfolio Value: ${portfolio_value:.2f}
                         """
-                                        send_email(f"Trade Failure: {symbol}", email_body)  # Notify on failure
-                                else:
-                                    logger.warning(f"Insufficient cash for buy {symbol}: cost={cost:.2f}, cash={cash:.2f}")
-                                    decision = "Hold (Insufficient Cash)"
-                            else:
-                                logger.warning(f"Invalid ATR for {symbol}: {atr_val}")
-                                decision = "Hold (Invalid ATR)"
-                        elif qty_owned > 0 and time_held >= CONFIG['MIN_HOLDING_PERIOD_MINUTES']:  # Check min hold to avoid day trade violations
-                            max_price = max(float(position_obj.current_price) if position_obj else price, price)  # Update from current price
-                            trailing_stop = max_price * (1 - CONFIG['TRAILING_STOP_PERCENTAGE'])
-                            stop_loss = entry_price - CONFIG['STOP_LOSS_ATR_MULTIPLIER'] * atr_val
-                            take_profit = entry_price + CONFIG['TAKE_PROFIT_ATR_MULTIPLIER'] * atr_val
-                            if price <= trailing_stop or price <= stop_loss or price >= take_profit or (prediction < CONFIG['PREDICTION_THRESHOLD_SELL'] and current_rsi > CONFIG['RSI_SELL_THRESHOLD']):
-                                decision = "Sell"
-                                logger.info(f"Sell attempt for {symbol}: qty={qty_owned}, price=${price:.2f}, prediction={prediction:.3f}")
-                                order = MarketOrderRequest(symbol=symbol, qty=qty_owned, side=OrderSide.SELL, time_in_force=TimeInForce.GTC)
-                                try:
-                                    trading_client.submit_order(order)
-                                    email_body = f"""
-                        Sold {qty_owned} shares of {symbol} at ${price:.2f}
-                        Prediction Confidence: {prediction:.3f}
-                        RSI: {current_rsi:.2f}
-                        ADX: {current_adx:.2f}
-                        Volatility: {current_volatility:.2f}
-                        ATR: {atr_val:.2f}
-                        Time Held: {time_held:.2f} minutes
-                        Current Cash: ${float(account.cash):.2f}
-                        Portfolio Value: ${portfolio_value:.2f}
-                        """
-                                    send_email(f"Trade Update: {symbol}", email_body)
-                                except Exception as e:
-                                    logger.error(f"Failed to submit sell order for {symbol}: {str(e)}")
-                                    decision = "Hold"
-                                    email_body = f"""
-                        Failed to sell {qty_owned} shares of {symbol} at ${price:.2f}
-                        Error: {str(e)}
-                        Prediction Confidence: {prediction:.3f}
-                        RSI: {current_rsi:.2f}
-                        ADX: {current_adx:.2f}
-                        Volatility: {current_volatility:.2f}
-                        ATR: {atr_val:.2f}
-                        Time Held: {time_held:.2f} minutes
-                        Current Cash: ${float(account.cash):.2f}
-                        Portfolio Value: ${portfolio_value:.2f}
-                        """
-                                    send_email(f"Trade Failure: {symbol}", email_body)
-                                else:
-                                    logger.warning(f"Insufficient cash for buy {symbol}: cost={cost:.2f}, cash={cash:.2f}")
-                                    decision = "Hold (Insufficient Cash)"
+                                            send_email(f"Trade Failure: {symbol}", email_body)
+                                    else:
+                                        logger.warning(f"Insufficient cash for buy {symbol}: cost={cost:.2f}, cash={cash:.2f}")
+                                        decision = "Hold (Insufficient Cash)"
+                                except (ValueError, ZeroDivisionError) as e:
+                                    logger.warning(f"Calculation error for buy {symbol}: {str(e)}. ATR={atr_val:.2f}, Stop distance={stop_loss_distance:.2f}")
+                                    decision = "Hold (Calculation Error)"
                             else:
                                 logger.warning(f"Invalid ATR for {symbol}: {atr_val}")
                                 decision = "Hold (Invalid ATR)"
