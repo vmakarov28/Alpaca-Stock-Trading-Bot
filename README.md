@@ -292,7 +292,8 @@ Run live trading:
 - In one second, this program flips more transistors states (1s/0s) than there are stars in the observable universe (~2 × 10¹² galaxies × ~10¹¹ stars each) … 4,000 times over.
 - The CPU is moving enough data through RAM to stream ~23 000 simultaneous 4K Netflix videos.
 - In total, the computer switches 28 quintillion (28,000,000,000,000,000,000) transistor state changes per second
-Troubleshooting
+
+## Troubleshooting
 
 - Rate Limit Error ("too many requests"): Add time.sleep(1) after bars = client.get_stock_bars(request).df in fetch_data (line 287). Increase to 2 seconds if persists.
 - Missing Headers (longintrepr.h): Ensure apt-get install -y python3.12-dev ran successfully. Verify with find /usr/include -name longintrepr.h.
