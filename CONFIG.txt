@@ -1,62 +1,84 @@
 CONFIG = {
     # Trading Parameters - Settings related to trading operations
-    'SYMBOLS': ['SPY', 'MSFT', 'AAPL', 'AMZN', 'NVDA', 'META', 'TSLA', 'GOOGL'],  # List of stock symbols to trade
+    'SYMBOLS': [ 'AAPL', 'NVDA', 'GOOGL', 'AMZN', 'SPY'],  # List of stock symbols to trade
     'TIMEFRAME': TimeFrame(15, TimeFrameUnit.Minute),  # Time interval for data fetching
     'INITIAL_CASH': 100000.00,  # Starting cash for trading simulation
     'MIN_HOLDING_PERIOD_MINUTES': 45,  # Minimum holding period for trades
-    'TRANSACTION_COST_PER_TRADE': 0.25,  # Cost per trade
 
-    # Data Fetching and Caching - Parameters for data retrieval and storage
+    # Data Fetching and Caching - Parameters for data retrieval and storage (format: yy/mm/dd)
     'TRAIN_DATA_START_DATE': '2015-01-01',  # Start date for training data
-    'BACKTEST_START_DATE': '2025-01-01',  # Start date for backtesting
+    'TRAIN_END_DATE': '2024-06-30',  # End date for training data (extended to include more recent data)
+    'VAL_START_DATE': '2024-07-01',  # Start date for validation data (shifted for recent validation)
+    'VAL_END_DATE': '2024-12-31',  # End date for validation data (now ends before backtest to prevent overlap/leakage)
+    'BACKTEST_START_DATE': '2025-01-01',  # Start date for backtesting (out-of-sample, now fully after val)
+
     'SIMULATION_DAYS': 180,  # Number of days for simulation
     'MIN_DATA_POINTS': 100,  # Minimum data points required for processing
     'CACHE_DIR': './cache',  # Directory for caching data
+    'MODEL_CACHE_DIR': '/mnt/c/Users/aipla/Desktop/Model Weights',  # Directory for saving model weights, scalers, and sentiment
     'CACHE_EXPIRY_SECONDS': 24 * 60 * 60,  # Expiry time for cached data in seconds
-    'LIVE_DATA_BARS': 200,  # Number of bars to fetch for live data
+    'LIVE_DATA_BARS': 500,  # Number of bars to fetch for live data
 
     # Model Training - Settings for training the machine learning model
-    'TRAIN_EPOCHS': 100,  # Number of epochs for training the model
+    'TRAIN_EPOCHS': 200,  # Number of epochs for training the model
     'BATCH_SIZE': 32,  # Batch size for training
     'TIMESTEPS': 30,  # Number of time steps for sequence data
     'EARLY_STOPPING_MONITOR': 'val_loss',  # Metric to monitor for early stopping
-    'EARLY_STOPPING_PATIENCE': 15,  # Patience for early stopping
-    'EARLY_STOPPING_MIN_DELTA': 0.0005,  # Minimum delta for early stopping
+    'EARLY_STOPPING_PATIENCE': 20,  # Patience for early stopping
+    'EARLY_STOPPING_MIN_DELTA': 0.0001,  # Reduced min delta to detect smaller improvements
+    'LEARNING_RATE': 0.001,  # Reduced initial learning rate for Adam to stabilize training
+    'LR_SCHEDULER_PATIENCE': 5,  # Patience for ReduceLROnPlateau
+    'LR_REDUCTION_FACTOR': 0.5,  # Factor to multiply LR by
+    'LOOK_AHEAD_BARS': 7,  # Number of bars to look ahead for future direction target
+    'NUM_PARALLEL_WORKERS': 4,  # Number of parallel workers for symbol training (tune based on VRAM/CPU cores)
 
     # API and Authentication - Credentials for API access
-    'ALPACA_API_KEY': 'REPLACE-ME',  # API key for Alpaca
-    'ALPACA_SECRET_KEY': 'REPLACE-ME',  # Secret key for Alpaca
+    'ALPACA_API_KEY': 'PK442T0XBG553SK7IZ5B',  # API key for Alpaca
+    'ALPACA_SECRET_KEY': '2upYWNzeRIGGRHk1FXKVtDpdSbgqlqmP3Q0flW8Z',  # Secret key for Alpaca
 
     # Email Notifications - Configuration for sending email alerts
-    'EMAIL_SENDER': 'REPLACE-ME@gmail.com',  # Email address for sending notifications
+    'EMAIL_SENDER': 'alpaca.ai.tradingbot@gmail.com',  # Email address for sending notifications
     'EMAIL_PASSWORD': 'hjdf sstp pyne rotq',  # Password for the email account
-    'EMAIL_RECEIVER': ['REPLACE-ME@gmail.com', 'REPLACE-ME@d125.org'],  # List of email recipients
+    'EMAIL_RECEIVER': ['aiplane.scientist@gmail.com', 'vmakarov28@students.d125.org', 'tchaikovskiy@hotmail.com'],  # List of email recipients
     'SMTP_SERVER': 'smtp.gmail.com',  # SMTP server for email
-    'SMTP_PORT': 587,  # Port for SMTP server
+    'SMTP_PORT': 587,  #z Port for SMTP server
 
     # Logging and Monitoring - Settings for tracking activities
     'LOG_FILE': 'trades.log',  # File for logging trades
 
+    # Strategy Thresholds - Thresholds for trading decisions
+    'CONFIDENCE_THRESHOLD': 0.52,  # Lowered to capture more predictions above neutral while maintaining selectivity
+    'PREDICTION_THRESHOLD_BUY': 0.55,  # Lowered to allow more buy opportunities based on prediction distribution
+    'PREDICTION_THRESHOLD_SELL': 0.3,  # Tightened for quicker exits to reduce losses in downtrends
+    'RSI_BUY_THRESHOLD': 70,  # RSI threshold for buying (lowered for stronger oversold signals)
+    'RSI_SELL_THRESHOLD': 30,  # RSI threshold for selling (raised for stronger overbought signals)
+    'ADX_TREND_THRESHOLD': 20,  # Lowered to include weaker trends common in stable stocks like MSFT/AAPL
+    'MAX_VOLATILITY': 3.0,  # Increased to include volatile symbols like TSLA/META without excluding opportunities
+
     # Risk Management - Parameters to control trading risk
     'MAX_DRAWDOWN_LIMIT': 0.04,  # Maximum allowed drawdown
-    'RISK_PERCENTAGE': 0.05,  # Percentage of cash to risk per trade
-    'STOP_LOSS_ATR_MULTIPLIER': 1.0,  # Multiplier for ATR-based stop loss
-    'TAKE_PROFIT_ATR_MULTIPLIER': 2.5,  # Multiplier for ATR-based take profit
-    'TRAILING_STOP_PERCENTAGE': 0.015,  # Percentage for trailing stop
+    'RISK_PERCENTAGE': 0.06,  # Percentage of cash to risk per trade (halved for smaller positions)
+    'STOP_LOSS_ATR_MULTIPLIER': 1.5,  # Multiplier for ATR-based stop loss (widened to reduce whipsaws)
+    'TAKE_PROFIT_ATR_MULTIPLIER': 3.0,  # Multiplier for ATR-based take profit (tightened for quicker exits)
+    'TRAILING_STOP_PERCENTAGE': 0.05,  # Percentage for trailing stop (widened slightly)
 
-    # Strategy Thresholds - Thresholds for trading decisions
-    'CONFIDENCE_THRESHOLD': 0.45,  # Threshold for prediction confidence
-    'PREDICTION_THRESHOLD_BUY': 0.4,  # Threshold for buy signal
-    'PREDICTION_THRESHOLD_SELL': 0.20,  # Threshold for sell signal
-    'RSI_BUY_THRESHOLD': 54,  # RSI threshold for buying 54 is optimal
-    'RSI_SELL_THRESHOLD': 50,  # RSI threshold for selling^50
-    'ADX_TREND_THRESHOLD': 16,  # Threshold for ADX trend strength
-    'MAX_VOLATILITY': 4.1,  # Maximum allowed volatility
+    # Trading Parameters - Settings related to trading operations
+    'TRANSACTION_COST_PER_TRADE': 0.01,  # Cost per trade
 
     # Sentiment Analysis - Settings for sentiment analysis
     'SENTIMENT_MODEL': 'distilbert-base-uncased-finetuned-sst-2-english',  # Model for sentiment analysis
 
     # API Retry Settings - Configuration for handling API failures
-    'API_RETRY_ATTEMPTS': 3,  # Number of retry attempts for API calls
+    'API_RETRY_ATTEMPTS': 10,  # Number of retry attempts for API calls
     'API_RETRY_DELAY': 1000,  # Delay between retry attempts in milliseconds
+    'MODEL_VERSION': 'v100',  # Model architecture version; increment on structural changes to force retrain
+
+    # New: Retraining Cycle Parameters
+    'ENABLE_RETRAIN_CYCLE': True,  # Enable loop to retrain until criteria met (backtest mode only)
+    'MIN_FINAL_VALUE': 130000.0,  # Minimum final portfolio value to accept
+    'MAX_ALLOWED_DRAWDOWN': 30.0,  # Maximum allowed max_drawdown percentage (across symbols)
+    'MAX_RETRAIN_ATTEMPTS': 50,  # Max loop iterations to prevent infinite runs
+
+    #Monte Carlo Probability Simulation
+    'NUM_MC_SIMULATIONS': 500000,  # Number of Monte Carlo simulations for backtest robustness testing
 }
