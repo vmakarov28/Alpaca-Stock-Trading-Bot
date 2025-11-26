@@ -141,7 +141,7 @@ CONFIG = {
 
 
 #pyenv activate pytorch_env
-#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.9.4.py --backtest --force-train
+#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.9.6.py --backtest --force-train
 
 
 def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
