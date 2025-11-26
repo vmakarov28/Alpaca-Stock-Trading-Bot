@@ -1,11 +1,11 @@
 
 # +------------------------------------------------------------------------------+
-# |                            Alpaca Neural Bot v9.9.4                          |
+# |                            Alpaca Neural Bot v9.9.6                          |
 # +------------------------------------------------------------------------------+
 # | Author: Vladimir Makarov                                                     |
 # | Project Start Date: May 9, 2025                                              |
 # | License: GNU Lesser General Public License v2.1                              |
-# | Version: 9.9.3 (Un-Released)                                                 |
+# | Version: 9.9.6 (Un-Released)                                                 |
 # +------------------------------------------------------------------------------+
 
 import os  # For operating system interactions, like creating directories and handling file paths
@@ -55,7 +55,7 @@ colorama.init()
 
 CONFIG = {
     # Trading Parameters - Settings related to trading operations
-    'SYMBOLS': [ 'AAPL', 'NVDA', 'GOOGL', 'META', 'AMZN', 'SPY'],  # List of stock symbols to trade
+    'SYMBOLS': [ 'AAPL', 'NVDA', 'GOOGL', 'AMZN', 'SPY'],  # List of stock symbols to trade
     'TIMEFRAME': TimeFrame(15, TimeFrameUnit.Minute),  # Time interval for data fetching
     'INITIAL_CASH': 100000.00,  # Starting cash for trading simulation
     'MIN_HOLDING_PERIOD_MINUTES': 45,  # Minimum holding period for trades
@@ -96,18 +96,18 @@ CONFIG = {
     'EMAIL_PASSWORD': 'hjdf sstp pyne rotq',  # Password for the email account
     'EMAIL_RECEIVER': ['aiplane.scientist@gmail.com', 'vmakarov28@students.d125.org', 'tchaikovskiy@hotmail.com'],  # List of email recipients
     'SMTP_SERVER': 'smtp.gmail.com',  # SMTP server for email
-    'SMTP_PORT': 587,  # Port for SMTP server
+    'SMTP_PORT': 587,  #z Port for SMTP server
 
     # Logging and Monitoring - Settings for tracking activities
     'LOG_FILE': 'trades.log',  # File for logging trades
 
     # Strategy Thresholds - Thresholds for trading decisions
     'CONFIDENCE_THRESHOLD': 0.52,  # Lowered to capture more predictions above neutral while maintaining selectivity
-    'PREDICTION_THRESHOLD_BUY': 0.62,  # Lowered to allow more buy opportunities based on prediction distribution
-    'PREDICTION_THRESHOLD_SELL': 0.40,  # Tightened for quicker exits to reduce losses in downtrends
-    'RSI_BUY_THRESHOLD': 65,  # RSI threshold for buying (lowered for stronger oversold signals)
-    'RSI_SELL_THRESHOLD': 40,  # RSI threshold for selling (raised for stronger overbought signals)
-    'ADX_TREND_THRESHOLD': 15,  # Lowered to include weaker trends common in stable stocks like MSFT/AAPL
+    'PREDICTION_THRESHOLD_BUY': 0.55,  # Lowered to allow more buy opportunities based on prediction distribution
+    'PREDICTION_THRESHOLD_SELL': 0.3,  # Tightened for quicker exits to reduce losses in downtrends
+    'RSI_BUY_THRESHOLD': 70,  # RSI threshold for buying (lowered for stronger oversold signals)
+    'RSI_SELL_THRESHOLD': 30,  # RSI threshold for selling (raised for stronger overbought signals)
+    'ADX_TREND_THRESHOLD': 20,  # Lowered to include weaker trends common in stable stocks like MSFT/AAPL
     'MAX_VOLATILITY': 3.0,  # Increased to include volatile symbols like TSLA/META without excluding opportunities
 
     # Risk Management - Parameters to control trading risk
@@ -131,12 +131,14 @@ CONFIG = {
     # New: Retraining Cycle Parameters
     'ENABLE_RETRAIN_CYCLE': True,  # Enable loop to retrain until criteria met (backtest mode only)
     'MIN_FINAL_VALUE': 130000.0,  # Minimum final portfolio value to accept
-    'MAX_ALLOWED_DRAWDOWN': 35.0,  # Maximum allowed max_drawdown percentage (across symbols)
+    'MAX_ALLOWED_DRAWDOWN': 30.0,  # Maximum allowed max_drawdown percentage (across symbols)
     'MAX_RETRAIN_ATTEMPTS': 50,  # Max loop iterations to prevent infinite runs
 
     #Monte Carlo Probability Simulation
     'NUM_MC_SIMULATIONS': 500000,  # Number of Monte Carlo simulations for backtest robustness testing
 }
+
+
 
 #pyenv activate pytorch_env
 #python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.9.4.py --backtest --force-train
@@ -1226,8 +1228,6 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
     dfs = {}
     stock_info = []
     total_epochs = len(CONFIG['SYMBOLS']) * CONFIG['TRAIN_EPOCHS']
-    models = {}
-    scalers = {}
     training_sentiments = {}
     need_training = False
     for symbol in CONFIG['SYMBOLS']:
@@ -1429,13 +1429,14 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
                             decision = "Buy"
                             if atr_val > 0:
                                 try:
-                                    qty = max(1, int(risk_per_trade / stop_loss_distance))
-                                    max_qty = int(cash * 0.20 / price)  # Cap at 20% of cash per position to prevent over-allocation
-                                    qty = min(qty, max_qty)
+                                    risk_per_trade = cash * CONFIG['RISK_PERCENTAGE'] # Added: Define risk_per_trade here to fix NameError
+                                    stop_loss_distance = atr_val * CONFIG['STOP_LOSS_ATR_MULTIPLIER']
+                                    if stop_loss_distance <= 0:
+                                        raise ValueError("Stop loss distance <= 0")
+                                    qty = max(1, int(risk_per_trade / stop_loss_distance)) # Ensure qty >=1
                                     if qty > 0:
                                         cost = qty * price + CONFIG['TRANSACTION_COST_PER_TRADE']
                                         if cost <= cash:
-                                            # submit order
                                             logger.info(f"Submitting buy order for {qty} shares of {symbol} at ${price:.2f}")
                                             order = MarketOrderRequest(
                                                 symbol=symbol,
