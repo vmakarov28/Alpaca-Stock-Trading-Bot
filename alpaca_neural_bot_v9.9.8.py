@@ -1,11 +1,11 @@
 
 # +------------------------------------------------------------------------------+
-# |                            Alpaca Neural Bot v9.9.6                          |
+# |                            Alpaca Neural Bot v9.9.8                          |
 # +------------------------------------------------------------------------------+
 # | Author: Vladimir Makarov                                                     |
 # | Project Start Date: May 9, 2025                                              |
 # | License: GNU Lesser General Public License v2.1                              |
-# | Version: 9.9.6 (Un-Released)                                                 |
+# | Version: 9.9.8 (Un-Released)                                                 |
 # +------------------------------------------------------------------------------+
 
 import os  # For operating system interactions, like creating directories and handling file paths
@@ -132,16 +132,24 @@ CONFIG = {
     'ENABLE_RETRAIN_CYCLE': True,  # Enable loop to retrain until criteria met (backtest mode only)
     'MIN_FINAL_VALUE': 130000.0,  # Minimum final portfolio value to accept
     'MAX_ALLOWED_DRAWDOWN': 30.0,  # Maximum allowed max_drawdown percentage (across symbols)
-    'MAX_RETRAIN_ATTEMPTS': 50,  # Max loop iterations to prevent infinite runs
+    'MAX_RETRAIN_ATTEMPTS': 230,  # Max loop iterations to prevent infinite runs
 
     #Monte Carlo Probability Simulation
     'NUM_MC_SIMULATIONS': 500000,  # Number of Monte Carlo simulations for backtest robustness testing
+
+
+    # Account Management
+    'RESET_ACCOUNT_ON_START': True,   # Set to True only when you want a full reset (closes all positions & cancels orders)
+    'PAPER_TRADING': True,             # Set to False when going live with real money
+    'DESIRED_STARTING_CASH': 200000.00,  # Desired cash for reset
 }
 
 
 
 #pyenv activate pytorch_env
-#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.9.6.py --backtest --force-train
+#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.9.8.py --backtest --force-train
+
+
 
 
 def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -314,6 +322,155 @@ def create_cache_directory() -> None:
     wait=wait_fixed(CONFIG['API_RETRY_DELAY'] / 1000),
     retry=retry_if_exception_type(Exception)
 )
+
+def cleanup_account_on_start() -> None:
+    """
+    Optional one-time account reset + cash injection.
+    Controlled by two CONFIG flags:
+        'RESET_ACCOUNT_ON_START': True → runs the reset once
+        'PAPER_TRADING': True/False → paper or live keys
+    After running once it turns itself off automatically.
+    """
+    # ------------------------------------------------------------------
+    # 1. Do nothing unless you explicitly ask for a reset
+    # ------------------------------------------------------------------
+    if not (args.reset or CONFIG.get('RESET_ACCOUNT_ON_START', False)):
+        return
+
+    # ------------------------------------------------------------------
+    # 2. Settings
+    # ------------------------------------------------------------------
+    PAPER_MODE = CONFIG.get('PAPER_TRADING', True)                    # True = paper, False = live
+    DESIRED_STARTING_CASH = CONFIG.get('DESIRED_STARTING_CASH', 200000.00)  # Default to 200k if not set
+    FAKE_SYMBOL = "SPY"                                               # Cheap liquid ETF for cash injection trick
+    CHUNK_SIZE = 100000.00                                            # Smaller $100k chunks to avoid qty locks
+    POLL_TIMEOUT = 600                                                # 10min for off-hours
+    POLL_INTERVAL = 10                                                # Check every 10s to reduce API load
+
+    trading_client = TradingClient(
+        CONFIG['ALPACA_API_KEY'],
+        CONFIG['ALPACA_SECRET_KEY'],
+        paper=PAPER_MODE
+    )
+
+    try:
+        print(f"{Fore.YELLOW}=== ACCOUNT RESET REQUESTED ==={Style.RESET_ALL}")
+        logger.info("Starting account reset and cash injection")
+
+        # --------------------------------------------------------------
+        # 3. Close all positions AND cancel all orders in one call
+        # --------------------------------------------------------------
+        trading_client.close_all_positions(cancel_orders=True)
+        logger.info("Requested close all positions and cancel orders")
+
+        # Extra cancel for any lingering
+        trading_client.cancel_orders()
+
+        # --------------------------------------------------------------
+        # 4. Poll until cleared
+        # --------------------------------------------------------------
+        clock = trading_client.get_clock()
+        if not clock.is_open:
+            warning_msg = f"Market is closed (next open: {clock.next_open}). Position close orders queued and will be filled automatically by Alpaca at market open—no need to rerun for closes. Skipping polling and injection to avoid errors. Positions will clear at open; check dashboard for status. Rerun during open hours if you need to confirm or inject cash after clears."
+            logger.warning(warning_msg)
+            print(f"{Fore.YELLOW}{warning_msg}{Style.RESET_ALL}")
+            raise Exception("Market closed - closes queued but reset incomplete. Rerun during open hours for full reset if needed.")
+        else:
+            start_time = time.time()
+            while time.time() - start_time < POLL_TIMEOUT:
+                positions = trading_client.get_all_positions()
+                orders = trading_client.get_orders()
+                if not positions and not orders:
+                    logger.info("All positions closed and orders cancelled successfully")
+                    print(f"{Fore.CYAN}All positions closed and orders cancelled{Style.RESET_ALL}")
+                    break
+                pos_symbols = [pos.symbol for pos in positions]
+                order_ids = [str(order.id) for order in orders]
+                logger.info(f"Waiting for clears... Positions left: {len(positions)} ({pos_symbols}), Orders left: {len(orders)} ({order_ids})")
+                print(f"  → Waiting for clears... ({len(positions)} positions left: {pos_symbols}, {len(orders)} orders left)")
+                time.sleep(POLL_INTERVAL)
+            else:
+                pos_symbols = [pos.symbol for pos in positions]
+                order_ids = [str(order.id) for order in orders]
+                warning_msg = f"Timed out waiting for clears. Remaining: {len(positions)} positions ({pos_symbols}), {len(orders)} orders ({order_ids}). Continuing to injection anyway - check dashboard."
+                logger.warning(warning_msg)
+                print(f"{Fore.YELLOW}{warning_msg}{Style.RESET_ALL}")
+            # Force cancel any lingering orders post-timeout
+            trading_client.cancel_orders()
+
+        # --------------------------------------------------------------
+        # 5. Inject / remove cash in chunks
+        # --------------------------------------------------------------
+        account = trading_client.get_account()
+        current_cash = float(account.cash)
+        difference = DESIRED_STARTING_CASH - current_cash
+
+        if abs(difference) > 50:
+            num_chunks = max(1, int(abs(difference) / CHUNK_SIZE))
+            chunk_diff = difference / num_chunks
+            for i in range(num_chunks):
+                # Poll for no holds on FAKE_SYMBOL before submit
+                chunk_poll_start = time.time()
+                while time.time() - chunk_poll_start < 120:
+                    try:
+                        pos = trading_client.get_position(FAKE_SYMBOL)
+                        if float(pos.qty_available) >= 0 and float(pos.qty_held_for_orders) == 0:
+                            break
+                    except APIError as e:
+                        if 'not found' in str(e):  # No position is fine
+                            break
+                    print(f"  → Waiting for {FAKE_SYMBOL} to be free from holds...")
+                    time.sleep(5)
+                else:
+                    logger.warning(f"Timeout waiting for {FAKE_SYMBOL} free - skipping chunk {i+1}")
+                    continue
+
+                # Recalculate this chunk
+                account = trading_client.get_account()
+                current_cash = float(account.cash)
+                this_diff = min(chunk_diff, DESIRED_STARTING_CASH - current_cash) if difference > 0 else max(chunk_diff, DESIRED_STARTING_CASH - current_cash)
+                if abs(this_diff) < 50:
+                    break
+
+                price_estimate = 500.0 if FAKE_SYMBOL == "SPY" else 100.0
+                fake_qty = abs(this_diff) / price_estimate
+
+                side = OrderSide.SELL if this_diff > 0 else OrderSide.BUY
+                fake_order = MarketOrderRequest(
+                    symbol=FAKE_SYMBOL,
+                    qty=fake_qty,
+                    side=side,
+                    time_in_force=TimeInForce.DAY
+                )
+                try:
+                    trading_client.submit_order(fake_order)
+                    time.sleep(2)
+                    trading_client.cancel_orders()
+                    logger.info(f"Chunk {i+1}/{num_chunks}: adjusted by {this_diff:+,.2f}")
+                    print(f"{Fore.CYAN}Chunk {i+1}: Cash adjusted by {this_diff:+,.2f}{Style.RESET_ALL}")
+                except Exception as e:
+                    logger.warning(f"Chunk {i+1} failed: {str(e)} - skipping")
+
+        # --------------------------------------------------------------
+        # 6. Final status
+        # --------------------------------------------------------------
+        account = trading_client.get_account()
+        final_cash = float(account.cash)
+        print(f"{Fore.GREEN}RESET COMPLETE!{Style.RESET_ALL}")
+        print(f"   Cash          : ${final_cash:,.2f}")
+        print(f"   Portfolio     : ${float(account.portfolio_value):,.2f}")
+        print(f"   Positions     : 0")
+        logger.info(f"Reset complete – cash ≈ ${final_cash:,.2f}")
+
+        # --------------------------------------------------------------
+        # 7. Turn the reset flag OFF so it never runs again unintentionally
+        # --------------------------------------------------------------
+        CONFIG['RESET_ACCOUNT_ON_START'] = False
+        print(f"{Fore.YELLOW}Reset flag automatically turned OFF – safe for future runs.{Style.RESET_ALL}")
+
+    except Exception as e:
+        logger.error(f"Account reset failed: {str(e)}")
+        print(f"{Fore.RED}Reset failed: {str(e)}{Style.RESET_ALL}")
 
 # Fetches last N bars from Alpaca for live, uses recent dates, renames vwap, sorts, retries on error.
 def fetch_recent_data(symbol: str, num_bars: int) -> pd.DataFrame:
@@ -1429,55 +1586,54 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
                             decision = "Buy"
                             if atr_val > 0:
                                 try:
-                                    risk_per_trade = cash * CONFIG['RISK_PERCENTAGE'] # Added: Define risk_per_trade here to fix NameError
+                                    risk_per_trade = cash * CONFIG['RISK_PERCENTAGE']
                                     stop_loss_distance = atr_val * CONFIG['STOP_LOSS_ATR_MULTIPLIER']
                                     if stop_loss_distance <= 0:
                                         raise ValueError("Stop loss distance <= 0")
-                                    qty = max(1, int(risk_per_trade / stop_loss_distance)) # Ensure qty >=1
-                                    if qty > 0:
+                                    qty = max(1, int(risk_per_trade / stop_loss_distance))
+                                    cost = qty * price + CONFIG['TRANSACTION_COST_PER_TRADE']
+                                    if cost > cash:
+                                        qty = max(0, int((cash - CONFIG['TRANSACTION_COST_PER_TRADE']) / price))  # Downsize to max affordable qty
                                         cost = qty * price + CONFIG['TRANSACTION_COST_PER_TRADE']
-                                        if cost <= cash:
-                                            logger.info(f"Submitting buy order for {qty} shares of {symbol} at ${price:.2f}")
-                                            order = MarketOrderRequest(
-                                                symbol=symbol,
-                                                qty=qty,
-                                                side=OrderSide.BUY,
-                                                time_in_force=TimeInForce.GTC
-                                            )
-                                            try:
-                                                trading_client.submit_order(order)
-                                                email_body = f"""
-                        Bought {qty} shares of {symbol} at ${price:.2f}
-                        Prediction Confidence: {prediction:.3f}
-                        RSI: {current_rsi:.2f}
-                        ADX: {current_adx:.2f}
-                        Volatility: {current_volatility:.2f}
-                        ATR: {atr_val:.2f}
-                        Current Cash: ${cash - cost:.2f}
-                        Portfolio Value: ${portfolio_value:.2f}
-                        """
-                                                send_email(f"Trade Update: Bought {symbol}", email_body)
-                                            except Exception as e:
-                                                logger.error(f"Failed to submit buy order for {symbol}: {str(e)}")
-                                                decision = "Buy (Failed)"
-                                                email_body = f"""
-                        Failed to buy {qty} shares of {symbol} at ${price:.2f}
-                        Error: {str(e)}
-                        Prediction Confidence: {prediction:.3f}
-                        RSI: {current_rsi:.2f}
-                        ADX: {current_adx:.2f}
-                        Volatility: {current_volatility:.2f}
-                        ATR: {atr_val:.2f}
-                        Current Cash: ${cash:.2f}
-                        Portfolio Value: ${portfolio_value:.2f}
-                        """
-                                                send_email(f"Trade Failure: {symbol}", email_body)
-                                        else:
-                                            logger.warning(f"Insufficient cash for buy {symbol}: cost={cost:.2f}, cash={cash:.2f}")
-                                            decision = "Hold (Insufficient Cash)"
+                                    if qty > 0 and cost <= cash:
+                                        logger.info(f"Submitting buy order for {qty} shares of {symbol} at ${price:.2f}")
+                                        order = MarketOrderRequest(
+                                            symbol=symbol,
+                                            qty=qty,
+                                            side=OrderSide.BUY,
+                                            time_in_force=TimeInForce.GTC
+                                        )
+                                        try:
+                                            trading_client.submit_order(order)
+                                            email_body = f"""
+Bought {qty} shares of {symbol} at ${price:.2f}
+Prediction Confidence: {prediction:.3f}
+RSI: {current_rsi:.2f}
+ADX: {current_adx:.2f}
+Volatility: {current_volatility:.2f}
+ATR: {atr_val:.2f}
+Current Cash: ${cash - cost:.2f}
+Portfolio Value: ${portfolio_value:.2f}
+"""
+                                            send_email(f"Trade Update: Bought {symbol}", email_body)
+                                        except Exception as e:
+                                            logger.error(f"Failed to submit buy order for {symbol}: {str(e)}")
+                                            decision = "Buy (Failed)"
+                                            email_body = f"""
+Failed to buy {qty} shares of {symbol} at ${price:.2f}
+Error: {str(e)}
+Prediction Confidence: {prediction:.3f}
+RSI: {current_rsi:.2f}
+ADX: {current_adx:.2f}
+Volatility: {current_volatility:.2f}
+ATR: {atr_val:.2f}
+Current Cash: ${cash:.2f}
+Portfolio Value: ${portfolio_value:.2f}
+"""
+                                            send_email(f"Trade Failure: {symbol}", email_body)
                                     else:
-                                        logger.warning(f"Calculated qty=0 for {symbol}")
-                                        decision = "Hold (Qty=0)"
+                                        logger.warning(f"Qty=0 or insufficient cash for {symbol}: qty={qty}, cost={cost:.2f}, cash={cash:.2f}")
+                                        decision = "Hold (Qty=0 or Insufficient Cash)"
                                 except (ValueError, ZeroDivisionError) as e:
                                     logger.warning(f"Calculation error for buy {symbol}: {str(e)}. ATR={atr_val:.2f}, Stop distance={stop_loss_distance:.2f}")
                                     decision = "Hold (Calculation Error)"
@@ -1866,6 +2022,7 @@ if __name__ == "__main__":
     parser.add_argument('--backtest', action='store_true', help="Run in backtest-only mode")
     parser.add_argument('--force-train', action='store_true', help="Force retraining of models")
     parser.add_argument('--DEBUG', action='store_true', help="Enable debug printing for detailed informative outputs")
+    parser.add_argument('--reset', action='store_true', help="Force account reset and cash injection (overrides CONFIG flag)")
     args = parser.parse_args()
 
     # Configure logging (moved here to access args.DEBUG)
@@ -1881,6 +2038,9 @@ if __name__ == "__main__":
     root_logger.addHandler(stream_handler)
 
     logger = logging.getLogger(__name__)
+
+    # Optional account reset — only runs when you manually set the flag to True
+    cleanup_account_on_start()
 
     mp.set_start_method('spawn', force=True)  # Set early for CUDA multiprocessing safety
     main(backtest_only=args.backtest, force_train=args.force_train, debug=args.DEBUG)
