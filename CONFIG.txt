@@ -77,8 +77,14 @@ CONFIG = {
     'ENABLE_RETRAIN_CYCLE': True,  # Enable loop to retrain until criteria met (backtest mode only)
     'MIN_FINAL_VALUE': 130000.0,  # Minimum final portfolio value to accept
     'MAX_ALLOWED_DRAWDOWN': 30.0,  # Maximum allowed max_drawdown percentage (across symbols)
-    'MAX_RETRAIN_ATTEMPTS': 50,  # Max loop iterations to prevent infinite runs
+    'MAX_RETRAIN_ATTEMPTS': 230,  # Max loop iterations to prevent infinite runs
 
     #Monte Carlo Probability Simulation
     'NUM_MC_SIMULATIONS': 500000,  # Number of Monte Carlo simulations for backtest robustness testing
+
+
+    # Account Management
+    'RESET_ACCOUNT_ON_START': False,   # Set to True only when you want a full reset (closes all positions & cancels orders)
+    'PAPER_TRADING': True,             # Set to False when going live with real money
+    'DESIRED_STARTING_CASH': 200000.00,  # Desired cash for reset
 }
