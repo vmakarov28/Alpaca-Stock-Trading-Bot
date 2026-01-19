@@ -5,7 +5,6 @@ Alpaca Neural Bot v6.7 is an advanced AI-powered stock trading bot that leverage
 ## Key capabilities
 
 Neural Network Prediction: Uses a Conv1D + LSTM model to generate buy/sell signals based on historical and real-time data.
-Sentiment Analysis: Integrates DistilBERT for news sentiment scoring.
 Backtesting: Simulates trades with transaction costs, ATR-based stops, and performance metrics (Sharpe ratio, max drawdown).
 Live Trading: Executes market orders during open hours, with email notifications for trades and summaries.
 Multi-Symbol Support: Trades multiple stocks (e.g., SPY, MSFT, AAPL) in parallel using multiprocessing.
@@ -25,6 +24,8 @@ Backtest Mode: Computes total return, Sharpe ratio, max drawdown, win rate per s
 Live Mode: Runs every 15 minutes during market hours, with countdown timer.
 Force Train: Option to retrain models instead of using cache.
 Error Handling: Retries API calls, validates data, logs trades.
+
+***Scroll bellow installation steps to see explanation of how it works***
 
 ## Prerequisites
 
@@ -57,7 +58,7 @@ Restart your PC if prompted.
 - Check WSL version: wsl --list --verbose. Ensure Ubuntu is on version 2.
 
 ## Step 2: Install pyenv for Python Management
-9From now on the rest of the steps will be completed in wsl)
+*************From now on the rest of the steps will be completed in wsl*************
 
 Pyenv allows isolated Python environments.
 
@@ -82,15 +83,22 @@ Then add the new paths to the file.
 > 
 > eval "$(pyenv virtualenv-init -)"
 > 
-Press Cntrl + O to save and Cntrl + X to exit the file.
+Press Cntrl + O then Enter to save and Cntrl + X to exit the file.
 Now back in the command line refresh the file with:
 
     source ~/.bashrc
 Verify Pyenv was setup correcty with:
 
     pyenv --version
-
+Expected output: `pyenv 2.6.7` (Latest as of 8/24/25)
 ### Troubleshooting:
+- If "Unable to locate package llvm" use:
+  
+        sudo add-apt-repository universe
+        sudo apt update
+  then re-attempt the command:
+
+      sudo apt install -y make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev python3-openssl git
 - If pyenv not found, restart terminal or run exec $SHELL.
 - Error with dependencies: Re-run sudo apt install command.
 
@@ -111,6 +119,13 @@ Upgrade pip:
     pip install --upgrade pip
 
 Troubleshooting
+- If you get ``pyenv activate' requires Pyenv and Pyenv-Virtualenv to be loaded into your shell.
+Check your shell configuration and Pyenv and Pyenv-Virtualenv installation instructions.`` When using the command `pyenv activate pytorch_env` Run each line individually:
+
+        echo 'eval "$(pyenv init -)"' >> ~/.bashrc
+        eval "$(pyenv init -)"
+        source ~/.bashrc
+  then reattempt `pyenv activate pytorch_env`
 - If build fails, ensure all dependencies from Step 1 are installed.
 - Syntax Errors: Make sure all the paths are written properly with no mistakes.
 
@@ -119,7 +134,7 @@ Troubleshooting
 Open your WSL terminal (e.g., Ubuntu): Run wsl in Command Prompt or search for "Ubuntu" in the Start menu.
 Update the package list:
 
-    sudo apt update && sudo apt upgrade -y.'
+    sudo apt update && sudo apt upgrade -y
     
 Install the CUDA toolkit for WSL-Ubuntu:
 Add the NVIDIA CUDA repository: Follow the instructions at https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64&Distribution=WSL-Ubuntu&target_version=2.0.
@@ -131,6 +146,13 @@ Then copy and run the provided commands:
         sudo dpkg -i cuda-keyring_1.1-1_all.deb
         sudo apt-get update
         sudo apt-get install cuda-toolkit-12-6  # Replace 12-6 with the latest version, e.g., 12-5 if needed
+Add new paths to bash by running these commmands one by one:
+
+        echo 'export PATH=/usr/local/cuda/bin:$PATH' >> ~/.bashrc
+        echo 'export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
+        echo 'export PATH=/usr/lib/wsl/lib:$PATH' >> ~/.bashrc
+        source ~/.bashrc
+
 Verify CUDA installation: Run `nvcc --version` in WSL. It should display the CUDA version.
 
 ## Step 5: Install cuDNN in WSL
@@ -138,24 +160,30 @@ Verify CUDA installation: Run `nvcc --version` in WSL. It should display the CUD
 Download cuDNN from the NVIDIA Developer website: https://developer.nvidia.com/rdp/cudnn-download.
 - You made need to sign up for an NVIDIA Developer account if you don't have one (free).
 - Select cuDNN for CUDA 12.x (matching your toolkit version) and "Linux" (x86_64).
-- Download the tar file (e.g., cudnn-linux-x86_64-9.x.x.xx_cuda12-archive.tar.xz).
+- Select Linux > x86_64 > Ubuntu > 24.04 (Yours may varry) > deb (local) > FULL
+- Download the deb file (e.g., cudnn-local-repo-ubuntu2404-9.12.0_1.0-1_amd64.deb).
     In WSL, extract and install cuDNN:
         Copy the downloaded file to WSL (e.g., via /mnt/c/Users/YourUsername/Downloads/).
   
-Run:
+Run each command sequentially (**in pyenv**:
 ```
-    tar -xvf cudnn-linux-x86_64-9.x.x.xx_cuda12-archive.tar.xz
-    sudo cp cudnn-*-archive/include/cudnn*.h /usr/local/cuda/include
-    sudo cp -P cudnn-*-archive/lib/libcudnn* /usr/local/cuda/lib64
-    sudo chmod a+r /usr/local/cuda/include/cudnn*.h /usr/local/cuda/lib64/libcudnn*
+cd /mnt/c/Users/YOUR USER/Downloads
+sudo dpkg -i cudnn-local-repo-ubuntu2404-9.12.0_1.0-1_amd64.deb
+sudo cp /var/cudnn-local-repo-ubuntu2404-9.12.0/cudnn-local-*-keyring.gpg /usr/share/keyrings/
+sudo apt update
+sudo apt install -y libcudnn9-cuda-12 libcudnn9-dev-cuda-12 libcudnn9-static-cuda-12
+echo 'export LD_LIBRARY_PATH=/usr/lib/cuda/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
+source ~/.bashrc
 ```
-Update your environment: Add to ~/.bashrc (run `nano ~/.bashrc`):
-
->export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
->Save and run source ~/.bashrc.
 
 ### Troubleshooting
+- Run:
 
+      wget https://developer.download.nvidia.com/compute/cudnn/9.12.0/local_installers/cudnn-local-repo-ubuntu2404-9.12.0_1.0-1_amd64.deb
+      sudo dpkg -i cudnn-local-repo-ubuntu2404-9.12.0_1.0-1_amd64.deb
+      sudo cp /var/cudnn-local-repo-ubuntu2404-9.12.0/cudnn-*-keyring.gpg /usr/share/keyrings/
+      sudo apt-get update
+      sudo apt-get -y install cudnn
 - If CUDA is not detected: Check nvidia-smi in WSL for GPU info.
 - Errors with versions: Ensure CUDA toolkit, cuDNN, and PyTorch match (e.g., all for CUDA 12.x).
 - For detailed guides: Refer to NVIDIA's CUDA on WSL user guide (linked above) or PyTorch installation docs at https://pytorch.org/get-started/locally/.
@@ -191,15 +219,27 @@ Install dependencies:
     sudo apt install -y build-essential wget
 
 Download and build TA-Lib:
+Remove any previous build artifacts (optional, to clean)
+    
+    rm -rf ~/ta-lib ta-lib-0.4.0-src.tar.gz
+Re-download and build with /usr/local prefix
 
     wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
     tar -xzf ta-lib-0.4.0-src.tar.gz
     cd ta-lib
-    ./configure --prefix=/usr
+    ./configure --prefix=/usr/local
     make
     sudo make install
     cd ~
     rm -rf ta-lib ta-lib-0.4.0-src.tar.gz
+    
+Set environment variables for pip to find TA-Lib
+
+    export TA_INCLUDE_PATH=/usr/local/include
+    export TA_LIBRARY_PATH=/usr/local/lib
+    
+Install the Python wrapper
+    pip install TA-Lib==0.4.32
 
 Install Python wrapper:
 
