@@ -30,6 +30,9 @@
 # | - GitHub: https://github.com/vmakarov28/Alpaca-Stock-Trading-Bot/tree/main   |
 # |                                                                              |
 # +------------------------------------------------------------------------------+
+# Updated for LINUX with PyTorch for RTX 5080 GPU acceleration
+#Activate virtu= environment: pyenv activate pytorch_env
+#Run with: python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v8.py --backtest --force-train
 
 import os
 import sys
@@ -101,13 +104,13 @@ CONFIG = {
     'LOOK_AHEAD_BARS': 7,  # Number of bars to look ahead for future direction target
 
     # API and Authentication - Credentials for API access
-    'ALPACA_API_KEY': 'PK442T0XBG553SK7IZ5B',  # API key for Alpaca
-    'ALPACA_SECRET_KEY': '2upYWNzeRIGGRHk1FXKVtDpdSbgqlqmP3Q0flW8Z',  # Secret key for Alpaca
+    'ALPACA_API_KEY': 'PK8CS035OBP8PPNJG9BD',  # API key for Alpaca
+    'ALPACA_SECRET_KEY': 'BcsW3T3GJJMnJ9ZPTei87VUU7KM38YYRvIVr6M2I',  # Secret key for Alpaca
 
     # Email Notifications - Configuration for sending email alerts
     'EMAIL_SENDER': 'alpaca.ai.tradingbot@gmail.com',  # Email address for sending notifications
     'EMAIL_PASSWORD': 'hjdf sstp pyne rotq',  # Password for the email account
-    'EMAIL_RECEIVER': ['aiplane.scientist@gmail.com', 'vmakarov28@students.d125.org'],  # List of email recipients
+    'EMAIL_RECEIVER': ['aiplane.scientist@gmail.com', 'vmakarov28@students.d125.org', 'tchaikovskiy@hotmail.com'],  # List of email recipients
     'SMTP_SERVER': 'smtp.gmail.com',  # SMTP server for email
     'SMTP_PORT': 587,  # Port for SMTP server
 
@@ -125,19 +128,19 @@ CONFIG = {
 
     # Risk Management - Parameters to control trading risk
     'MAX_DRAWDOWN_LIMIT': 0.04,  # Maximum allowed drawdown
-    'RISK_PERCENTAGE': 0.02,  # Percentage of cash to risk per trade (halved for smaller positions)
-    'STOP_LOSS_ATR_MULTIPLIER': 1.5,  # Multiplier for ATR-based stop loss (widened to reduce whipsaws)
-    'TAKE_PROFIT_ATR_MULTIPLIER': 3.0,  # Multiplier for ATR-based take profit (tightened for quicker exits)
-    'TRAILING_STOP_PERCENTAGE': 0.02,  # Percentage for trailing stop (widened slightly)
+    'RISK_PERCENTAGE': 0.02,  # Percentage of cash to risk per trade
+    'STOP_LOSS_ATR_MULTIPLIER': 0.8,  # Multiplier for ATR-based stop loss
+    'TAKE_PROFIT_ATR_MULTIPLIER': 2.5,  # Multiplier for ATR-based take profit
+    'TRAILING_STOP_PERCENTAGE': 0.015,  # Percentage for trailing stop
 
     # Strategy Thresholds - Thresholds for trading decisions
     'CONFIDENCE_THRESHOLD': 0.5,  # Threshold for prediction confidence
-    'PREDICTION_THRESHOLD_BUY': 0.55,  # Threshold for buy signal
-    'PREDICTION_THRESHOLD_SELL': 0.45,  # Threshold for sell signal
-    'RSI_BUY_THRESHOLD': 65,  # RSI threshold for buying 54 is optimal
-    'RSI_SELL_THRESHOLD': 45,  # RSI threshold for selling^50
+    'PREDICTION_THRESHOLD_BUY': 0.6,  # Threshold for buy signal
+    'PREDICTION_THRESHOLD_SELL': 0.20,  # Threshold for sell signal
+    'RSI_BUY_THRESHOLD': 45,  # RSI threshold for buying 54 is optimal
+    'RSI_SELL_THRESHOLD': 55,  # RSI threshold for selling^50
     'ADX_TREND_THRESHOLD': 25,  # Threshold for ADX trend strength
-    'MAX_VOLATILITY': 10,  # Maximum allowed volatility
+    'MAX_VOLATILITY': 4.1,  # Maximum allowed volatility
 
     # Sentiment Analysis - Settings for sentiment analysis
     #'SENTIMENT_MODEL': 'distilbert-base-uncased-finetuned-sst-2-english',  # Model for sentiment analysis
@@ -145,11 +148,15 @@ CONFIG = {
     # API Retry Settings - Configuration for handling API failures
     'API_RETRY_ATTEMPTS': 3,  # Number of retry attempts for API calls
     'API_RETRY_DELAY': 1000,  # Delay between retry attempts in milliseconds
-    'DEBUG_MODE': True,  # Debug mode: True for verbose output, False for clean beginner-friendly UI
+    'DEBUG_MODE': False,  # Debug mode: True for verbose output, False for clean beginner-friendly U
 }
+# transformers import pipeline
+#pipe = pipeline('sentiment-analysis', device='cuda:0')  # Or the appropriate task name
+#pipe = pipeline('sentiment-analysis', model='distilbert/distilbert-base-uncased-finetuned-sst-2-english', revision='714eb0f', device='cuda:0')
+#sentiment_pipeline = pipeline("sentiment-analysis", model=CONFIG['SENTIMENT_MODEL'], framework="pt", device='cuda:0')
 
 #pyenv activate pytorch_env
-#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v8.9.py --backtest --force-train
+#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v8.py --backtest --force-train
 
 # Configure logging
 root_logger = logging.getLogger()
@@ -162,10 +169,13 @@ stream_handler.setFormatter(formatter)
 root_logger.addHandler(file_handler)
 root_logger.addHandler(stream_handler)
 
+if not CONFIG.get('DEBUG_MODE', True):
+    stream_handler.setLevel(logging.WARNING)  # Suppress INFO logs in console (still written to file)
+
 logger = logging.getLogger(__name__)
 
 # Initialize sentiment analysis pipeline
-#sentiment_pipeline = pipeline("sentiment-analysis", model=CONFIG['SENTIMENT_MODEL'], framework="pt", device='cuda:0') #Updated for Linux 24.04.03 Ubuntu with RTX 5080 GPU
+sentiment_pipeline = pipeline("sentiment-analysis", model=CONFIG['SENTIMENT_MODEL'], framework="pt", device='cuda:0') #Updated for Linux 24.04.03 Ubuntu with RTX 5080 GPU
 
 
 def check_dependencies() -> None:
@@ -202,47 +212,72 @@ def create_cache_directory() -> None:
     wait=wait_fixed(CONFIG['API_RETRY_DELAY'] / 1000),
     retry=retry_if_exception_type(Exception)
 )
-def fetch_data(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
-    """Fetch historical bar data from Alpaca API in yearly increments."""
-    try:
-        client = StockHistoricalDataClient(CONFIG['ALPACA_API_KEY'], CONFIG['ALPACA_SECRET_KEY'])
-        all_bars = []
-        current_start = pd.Timestamp(start_date, tz='UTC')
-        end_dt = pd.Timestamp(end_date, tz='UTC')
-        increment = pd.DateOffset(years=1)
+def backtest(symbol: str, model: nn.Module, scaler: StandardScaler, df: pd.DataFrame, initial_cash: float, stop_loss_multiplier: float, take_profit_multiplier: float, timesteps: int, buy_threshold: float, sell_threshold: float, min_holding_period: int, transaction_cost: float) -> Tuple[float, List[float], int, float]:
+    """Backtest the trading strategy on historical data."""
+    start_date = CONFIG['BACKTEST_START_DATE']
+    # Set index to timestamp column, ensuring it's a timezone-aware DatetimeIndex
+    df = df.set_index(pd.to_datetime(df['timestamp'], utc=True))
+    backtest_df = df[df.index >= start_date]
+    if len(backtest_df) < timesteps + 1:
+        logger.warning(f"Insufficient data for backtest {symbol}: {len(backtest_df)} bars")
+        return initial_cash, [], 0, 0
 
-        while current_start < end_dt:
-            current_end = min(current_start + increment, end_dt)
-            logger.info(f"Fetching data for {symbol} from {current_start} to {current_end}")
-            effective_symbol = 'FB' if symbol == 'META' and current_start < pd.Timestamp('2021-10-28', tz='UTC') else symbol
-            request = StockBarsRequest(
-                symbol_or_symbols=effective_symbol,
-                timeframe=CONFIG['TIMEFRAME'],
-                start=current_start,
-                end=current_end
-            )
-            bars = client.get_stock_bars(request).df
-            if not bars.empty:
-                df_bars = bars.reset_index().rename(columns={'vwap': 'VWAP'})
-                all_bars.append(df_bars)
-                logger.info(f"Fetched {len(df_bars)} bars for {symbol} from {df_bars['timestamp'].min()} to {df_bars['timestamp'].max()}")
-            else:
-                logger.info(f"No data for {symbol} from {current_start} to {current_end}, skipping")
-            current_start = current_end
+    X, y = preprocess_data(backtest_df, timesteps, add_noise=False)
 
-        if all_bars:
-            df = pd.concat(all_bars).sort_values('timestamp')
-            df = df.drop_duplicates(subset='timestamp', keep='first')
-            logger.info(f"Total fetched {len(df)} bars for {symbol}")
+    cash = initial_cash
+    shares = 0
+    entry_price = 0.0
+    entry_time = None
+    returns = []
+    peak_value = initial_cash
+    trade_count = 0
+    wins = 0
+    last_prediction = 0.5
+
+    for i in tqdm(range(timesteps, len(backtest_df)), desc=f"Backtesting {symbol}", unit="step"):
+        current_sequence = X[i - timesteps:i].reshape(1, timesteps, -1)
+        prediction = make_prediction(model, scaler.transform(current_sequence.reshape(-1, current_sequence.shape[-1])).reshape(current_sequence.shape))
+        price = backtest_df['close'].iloc[i]
+        atr_val = backtest_df['ATR'].iloc[i]
+        rsi = backtest_df['RSI'].iloc[i]
+        adx = backtest_df['ADX'].iloc[i]
+        volatility = backtest_df['Volatility'].iloc[i]
+        timestamp = backtest_df.index[i]
+
+        if shares == 0:
+            if prediction > buy_threshold and rsi < CONFIG['RSI_BUY_THRESHOLD'] and adx > CONFIG['ADX_TREND_THRESHOLD'] and volatility < CONFIG['MAX_VOLATILITY']:
+                qty = int((cash * CONFIG['RISK_PERCENTAGE']) / (price * stop_loss_multiplier * atr_val))
+                if qty > 0:
+                    shares = qty
+                    entry_price = price
+                    entry_time = timestamp
+                    cash -= shares * price + transaction_cost
+                    trade_count += 1
         else:
-            df = pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'VWAP'])
+            holding_duration = (timestamp - entry_time).total_seconds() / 60
+            if holding_duration >= min_holding_period:
+                if prediction < sell_threshold or rsi > CONFIG['RSI_SELL_THRESHOLD'] or price <= entry_price - stop_loss_multiplier * atr_val or price >= entry_price + take_profit_multiplier * atr_val:
+                    cash += shares * price - transaction_cost
+                    return_val = (shares * (price - entry_price) - 2 * transaction_cost) / (shares * entry_price)
+                    returns.append(return_val)
+                    if return_val > 0:
+                        wins += 1
+                    shares = 0
+                    entry_price = 0.0
+                    entry_time = None
 
-        if len(df) < CONFIG['MIN_DATA_POINTS']:
-            raise ValueError(f"Insufficient data for {symbol}: got {len(df)} bars, need {CONFIG['MIN_DATA_POINTS']}")
-        return df
-    except Exception as e:
-        logger.error(f"Error fetching data for {symbol}: {str(e)}")
-        raise
+        portfolio_value = cash + shares * price
+        peak_value = max(peak_value, portfolio_value)
+        drawdown = (peak_value - portfolio_value) / peak_value
+        if drawdown > CONFIG['MAX_DRAWDOWN_LIMIT']:
+            # Liquidate if drawdown exceeds limit
+            if shares > 0:
+                cash += shares * price - transaction_cost
+                shares = 0
+
+        last_prediction = prediction
+
+    return cash, returns, trade_count, (wins / trade_count * 100 if trade_count > 0 else 0)
 
 def load_or_fetch_data(symbol: str, start_date: str, end_date: str) -> Tuple[pd.DataFrame, bool]:
     """Load historical data from cache or fetch from API."""
@@ -604,158 +639,134 @@ def train_symbol(symbol, expected_features, force_train):
         del X, y
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-    return symbol, df, model, scaler, data_loaded, model_loaded
+    return symbol, df, model, scaler, data_loaded, sentiment, sentiment_loaded, model_loaded
 
-def backtest(symbol: str, model: nn.Module, scaler: RobustScaler, df: pd.DataFrame, initial_cash: float,
-             stop_loss_atr_multiplier: float, take_profit_atr_multiplier: float, timesteps: int,
-             buy_threshold: float, sell_threshold: float, min_holding_period_minutes: int,
-             transaction_cost_per_trade: float) -> Tuple[float, List[float], int, float]:
-    """Run backtest simulation for a symbol using trained model predictions."""
+def backtest(symbol: str, model: nn.Module, scaler: StandardScaler, df: pd.DataFrame,
+            initial_cash: float, stop_loss_atr_multiplier: float, take_profit_atr_multiplier: float,
+            timesteps: int, threshold_buy: float, threshold_sell: float,
+            min_holding_period_minutes: int, transaction_cost_per_trade: float) -> Tuple[float, List[float], int, float]:
+    """Backtest the model on historical data."""
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    logger.info(f"Running backtest for {symbol} on device: {device}")
-    
-    # Extract CONFIG values explicitly for clarity
-    confidence_threshold = CONFIG['CONFIDENCE_THRESHOLD']
-    rsi_buy_threshold = CONFIG['RSI_BUY_THRESHOLD']
-    rsi_sell_threshold = CONFIG['RSI_SELL_THRESHOLD']
-    adx_trend_threshold = CONFIG['ADX_TREND_THRESHOLD']
-    max_volatility = CONFIG['MAX_VOLATILITY']
-    trailing_stop_percentage = CONFIG['TRAILING_STOP_PERCENTAGE']
-    risk_percentage = CONFIG['RISK_PERCENTAGE']
-    
-    # Preprocess for inference: Use trained scaler, no y or new fitting
-    X_seq, y_ignore, scaler_ignore = preprocess_data(
-        df, timesteps, inference_mode=True, inference_scaler=scaler
-    )
-    
+    model.to(device)
     model.eval()
-    model = model.to(device)
-    X_tensor = torch.tensor(X_seq, dtype=torch.float32).to(device)
-    
-    predictions = []
+
+    # Set index to timestamp column, ensuring it's a timezone-aware DatetimeIndex
+    df = df.set_index(pd.to_datetime(df['timestamp'], utc=True))
+
+    # Filter data for backtest period with timezone-aware datetime
+    start_date = pd.to_datetime(CONFIG['BACKTEST_START_DATE'], utc=True)
+    backtest_df = df[df.index >= start_date]
+    if len(backtest_df) < CONFIG['MIN_DATA_POINTS']:
+        logger.warning(f"Insufficient data for {symbol} backtest: {len(backtest_df)} points")
+        return initial_cash, [], 0, 0.0
+
+    sentiment = load_news_sentiment(symbol)[0]
+    backtest_df = calculate_indicators(backtest_df, sentiment)
+    X, _ = preprocess_data(backtest_df, timesteps, add_noise=False)
+    if X.shape[0] == 0:
+        logger.warning(f"No valid sequences for {symbol} backtest")
+        return initial_cash, [], 0, 0.0
+
+    X_scaled = scaler.transform(X.reshape(-1, X.shape[-1])).reshape(X.shape)
+    X_tensor = torch.tensor(X_scaled, dtype=torch.float32).to(device)
     with torch.no_grad():
-        for i in range(0, len(X_tensor), CONFIG['BATCH_SIZE']):
-            batch = X_tensor[i:i + CONFIG['BATCH_SIZE']]
-            raw_logits = model(batch)
-            if i % 100 == 0:  # Log every 100 steps to avoid spam
-                logger.info(f"Sample raw logit for {symbol} at step {i}: mean={raw_logits.mean().item():.4f}, std={raw_logits.std().item():.4f}")
-            # Apply sigmoid to model outputs
-            outputs = torch.sigmoid(raw_logits)
-            predictions.extend(outputs.cpu().numpy().flatten())
-            del raw_logits  # Clean up
-            del outputs  # Explicitly delete outputs tensor
-    
+        outputs = model(X_tensor).cpu().numpy()
+        predictions = 1 / (1 + np.exp(-outputs))  # Sigmoid activation
+
     predictions = np.array(predictions)
-    logger.info(f"Predictions for {symbol}: min={predictions.min():.3f}, max={predictions.max():.3f}, mean={predictions.mean():.3f}")
+    logger.info(f"Raw sigmoid predictions for {symbol}: min={predictions.min():.3f}, max={predictions.max():.3f}, mean={predictions.mean():.3f}")
+    logger.info(f"Using raw predictions for {symbol} (no normalization applied)")
+    
+    k_start = 0  # Define starting index for backtest simulation
+    
+    pbar = None
+    if not CONFIG['DEBUG_MODE']:
+        pbar = tqdm(total=len(predictions) - k_start, desc=f"Backtesting {symbol}", leave=True)
     
     # Clean up CUDA tensors
     del X_tensor
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-    
-    # Initialize variables (initial_cash now per-symbol from call)
-    cash = initial_cash
-    returns = []
-    trade_count = 0
-    win_rate = 0.0
+    torch.cuda.empty_cache() if torch.cuda.is_available() else None
+
+    # Initialize backtest variables
+    cash = initial_cash / len(CONFIG['SYMBOLS'])
     position = 0
     entry_price = 0.0
     entry_time = None
     max_price = 0.0
     winning_trades = 0
-    
-    timestamps = df['timestamp'].iloc[timesteps:].reset_index(drop=True)
-    sim_start = pd.Timestamp(CONFIG['BACKTEST_START_DATE'], tz='UTC')
-    valid_timestamps = timestamps[timestamps >= sim_start]
-    if valid_timestamps.empty:
-        k_start = 0
-    else:
-        k_start = valid_timestamps.index[0]
-    logger.info(f"Backtest for {symbol}: starting cash=${cash:.2f}, k_start={k_start}, len(predictions)={len(predictions)}")
-    if k_start >= len(predictions):
-        logger.warning(f"No data points for backtest of {symbol}")
-        return cash, returns, trade_count, win_rate
-    num_backtest_steps = len(predictions) - k_start
-    if num_backtest_steps <= 0:
-        logger.warning(f"No backtest steps available for {symbol} (num_backtest_steps={num_backtest_steps})")
-        return cash, returns, trade_count, win_rate
-    
-    atr = df['ATR'].iloc[timesteps + k_start:timesteps + k_start + num_backtest_steps].values
-    prices = df['close'].iloc[timesteps + k_start:timesteps + k_start + num_backtest_steps].values
-    rsi = df['RSI'].iloc[timesteps + k_start:timesteps + k_start + num_backtest_steps].values
-    adx = df['ADX'].iloc[timesteps + k_start:timesteps + k_start + num_backtest_steps].values
-    volatility = df['Volatility'].iloc[timesteps + k_start:timesteps + k_start + num_backtest_steps].values
-    sim_timestamps = timestamps.iloc[k_start:k_start + num_backtest_steps].values
-    
-    for local_i in range(num_backtest_steps):
-        if local_i % 100 == 0:  # Log every 100 steps to avoid spam
-            logger.info(f"Processing backtest step {local_i} for {symbol}: prediction={predictions[k_start + local_i]:.3f}")
-        i = k_start + local_i
+
+    # Align prices and indicators with predictions (skip initial timesteps where indicators are NaN)
+    prices = backtest_df['close'].iloc[timesteps:].values
+    atr = backtest_df['ATR'].iloc[timesteps:].values
+    rsi = backtest_df['RSI'].iloc[timesteps:].values
+    adx = backtest_df['ADX'].iloc[timesteps:].values
+    volatility = backtest_df['Volatility'].iloc[timesteps:].values
+    timestamps = backtest_df.index[timesteps:]
+
+    for i in range(k_start, len(predictions)):
         pred = predictions[i]
-        price = prices[local_i]
-        atr_val = atr[local_i]
-        current_rsi = rsi[local_i]
-        current_adx = adx[local_i]
-        current_volatility = volatility[local_i]
-        ts = pd.Timestamp(sim_timestamps[local_i])
-        
-        if current_volatility > max_volatility or current_adx < adx_trend_threshold:
-            continue
-        
-        if pred < confidence_threshold:
-            continue
-        
-        if cash >= price:
-            qty = max(1, int((cash * risk_percentage) / (atr_val * stop_loss_atr_multiplier)))
-            cost = qty * price + transaction_cost_per_trade
-            if cost > cash:
-                qty = max(0, int((cash - transaction_cost_per_trade) / price))
+        price = prices[i]
+        atr_val = atr[i]
+        current_rsi = rsi[i]
+        current_adx = adx[i]
+        current_volatility = volatility[i]
+        ts = timestamps[i]
+
+        if position == 0:
+            if current_volatility <= CONFIG['MAX_VOLATILITY'] and current_adx >= CONFIG['ADX_TREND_THRESHOLD'] and pred >= threshold_buy and current_rsi < CONFIG['RSI_BUY_THRESHOLD']:
+                qty = max(1, int(cash * CONFIG['RISK_PERCENTAGE'] / (atr_val * stop_loss_atr_multiplier)))
                 cost = qty * price + transaction_cost_per_trade
-        else:
-            qty = 0
-            cost = 0
-        
-        #logger.info(f"Checking buy for {symbol}: pred={pred:.3f}, qty={qty}, cash={cash:.2f}, price={price:.2f}, rsi={current_rsi:.2f}, adx={current_adx:.2f}")
-        
-        if pred > buy_threshold and position == 0 and current_rsi < rsi_buy_threshold and current_adx > adx_trend_threshold and qty > 0 and cash >= cost:
-            if cash - cost >= 0:  # Safety check to prevent negative cash
-                position = qty
-                entry_price = price
-                max_price = price
-                entry_time = ts
-                cash -= cost
-                logger.info(f"{ts}: Bought {qty} shares of {symbol} at ${price:.2f}, cash: ${cash:.2f}")
+                if cost <= cash:
+                    position = qty
+                    entry_price = price
+                    entry_time = ts
+                    max_price = price
+                    cash -= cost
+                    logger.info(f"{ts}: Bought {qty} shares of {symbol} at ${price:.2f}, cash: ${cash:.2f}")
+                    if CONFIG['DEBUG_MODE']:
+                        print(f"{ts}: Bought {qty} shares of {symbol} at ${price:.2f}, cash: ${cash:.2f}")
+                    if pbar and not CONFIG['DEBUG_MODE']:
+                        pbar.set_postfix(status="Bought", cash=f"${cash:.2f}")  # Simplified postfix for clean UI
+                else:
+                    if CONFIG['DEBUG_MODE']:
+                        logger.info(f"Insufficient cash to buy {qty} shares of {symbol}: cash={cash:.2f}, cost={cost:.2f}")
             else:
-                logger.info(f"Insufficient cash to buy {qty} shares of {symbol}: cash={cash:.2f}, cost={cost:.2f}")
-        
-        elif position > 0:
-            if price > max_price:
-                max_price = price
-            trailing_stop = max_price * (1 - trailing_stop_percentage)
+                if CONFIG['DEBUG_MODE']:
+                    logger.info(f"Skipped buy for {symbol}: pred={pred:.3f}, rsi={current_rsi:.2f}, adx={current_adx:.2f}, volatility={current_volatility:.2f}, qty={qty}, cost={qty * price:.2f}, cash={cash:.2f}")
+                if pbar and not CONFIG['DEBUG_MODE']:
+                    pbar.set_postfix(status="Skipped")  # Simplified: Remove metrics to reduce clutter
+        else:
+            time_held = (ts - entry_time).total_seconds() / 60
+            max_price = max(max_price, price)
+            trailing_stop = max_price * (1 - CONFIG['TRAILING_STOP_PERCENTAGE'])
             stop_loss = entry_price - stop_loss_atr_multiplier * atr_val
             take_profit = entry_price + take_profit_atr_multiplier * atr_val
-            
-            if not isinstance(entry_time, pd.Timestamp):
-                raise TypeError(f"entry_time must be a pandas.Timestamp, got {type(entry_time)}")
-            time_held = (ts - entry_time).total_seconds() / 60
-            
-            if time_held >= min_holding_period_minutes:
-                if price <= trailing_stop or price <= stop_loss or price >= take_profit or (pred < sell_threshold and current_rsi > rsi_sell_threshold):
-                    cash += position * price - transaction_cost_per_trade
-                    ret = (price - entry_price) / entry_price
-                    returns.append(ret)
-                    trade_count += 1
-                    if ret > 0:
-                        winning_trades += 1
-                    logger.info(f"{ts}: Sold {position} shares of {symbol} at ${price:.2f}, return: {ret:.3f}, cash: ${cash:.2f}")
-                    position = 0
-                    logger.info(f"After sell: position={position}, cash={cash:.2f}")
-                    entry_time = None
-                    max_price = 0.0
-        
-        else:
-            logger.info(f"Skipped buy for {symbol}: pred={pred:.3f}, rsi={current_rsi:.2f}, adx={current_adx:.2f}, volatility={current_volatility:.2f}, qty={qty}, cost={qty * price:.2f}, cash={cash:.2f}")
-    
+            if time_held >= min_holding_period_minutes and (price <= trailing_stop or price <= stop_loss or price >= take_profit or (pred <= threshold_sell and current_rsi > CONFIG['RSI_SELL_THRESHOLD'])):
+                cash += position * price - transaction_cost_per_trade
+                ret = (price - entry_price) / entry_price
+                returns.append(ret)
+                trade_count += 1
+                if ret > 0:
+                    winning_trades += 1
+                logger.info(f"{ts}: Sold {position} shares of {symbol} at ${price:.2f}, return: {ret:.3f}, cash: ${cash:.2f}")
+                if CONFIG['DEBUG_MODE']:
+                    print(f"{ts}: Sold {position} shares of {symbol} at ${price:.2f}, return: {ret:.3f}, cash: ${cash:.2f}")
+                if pbar and not CONFIG['DEBUG_MODE']:
+                    pbar.set_postfix(status="Sold", cash=f"${cash:.2f}")  # Simplified postfix
+                position = 0
+                logger.info(f"After sell: position={position}, cash={cash:.2f}")
+                entry_time = None
+                max_price = 0.0
+            else:
+                if pbar and not CONFIG['DEBUG_MODE']:
+                    pbar.set_postfix(status="Holding")  # Simplified: Remove detailed metrics for less clutter
+
+        if pbar:
+            pbar.update(1)
+
+    if pbar:
+        pbar.close()
+
     if position > 0:
         cash += position * prices[-1] - transaction_cost_per_trade
         ret = (prices[-1] - entry_price) / entry_price
@@ -763,6 +774,9 @@ def backtest(symbol: str, model: nn.Module, scaler: RobustScaler, df: pd.DataFra
         trade_count += 1
         if ret > 0:
             winning_trades += 1
+        logger.info(f"Final close: Sold {position} shares of {symbol} at ${prices[-1]:.2f}, return: {ret:.3f}")
+        if CONFIG['DEBUG_MODE']:
+            print(f"Final close: Sold {position} shares of {symbol} at ${prices[-1]:.2f}, return: {ret:.3f}")
     win_rate = (winning_trades / trade_count * 100) if trade_count > 0 else 0.0
     return cash, returns, trade_count, win_rate
 
@@ -886,6 +900,7 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
         time.sleep(2)  # Allow GPU to stabilize
         logger.info("CUDA memory cleared after multiprocessing.")
 
+        for symbol, df, model, scaler, data_loaded, sentiment, sentiment_loaded, model_loaded in outputs:
         
         for symbol, df, model, scaler, data_loaded, model_loaded in outputs:
             dfs[symbol] = df
@@ -915,6 +930,8 @@ def main(backtest_only: bool = False, force_train: bool = False) -> None:
 
     if progress_bar:
         progress_bar.close()
+    if symbol_pbar:
+        symbol_pbar.close()
 
     for info in stock_info:
         for line in info:
@@ -1109,6 +1126,20 @@ Portfolio Value: ${portfolio_value:.2f}
         email_body = format_email_body(initial_cash, final_value, symbol_results, trade_counts, win_rates)
         send_email("Backtest Completed", email_body)
         logger.info(f"Backtest completed: Final value: ${final_value:.2f}")
+        if not CONFIG['DEBUG_MODE']:
+            print("\nBacktest Summary:")
+            print(f"Initial Cash: {Fore.CYAN}${initial_cash:.2f}{Style.RESET_ALL}")
+            print("Per Symbol Performance:")
+            for symbol in CONFIG['SYMBOLS']:
+                if symbol in symbol_results:
+                    metrics = symbol_results[symbol]
+                    win_color = Fore.GREEN if win_rates.get(symbol, 0) > 50 else Fore.RED
+                    sharpe_color = Fore.GREEN if metrics.get('sharpe_ratio', 0) > 0 else Fore.RED
+                    drawdown = metrics.get('max_drawdown', 0)
+                    draw_color = Fore.GREEN if drawdown < 10 else (Fore.YELLOW if drawdown < 20 else Fore.RED)
+                    print(f"  {Fore.BLUE}{symbol}{Style.RESET_ALL}: Trades={trade_counts.get(symbol, 0)}, Win Rate={win_color}{win_rates.get(symbol, 0):.1f}%{Style.RESET_ALL}, Sharpe Ratio={sharpe_color}{metrics.get('sharpe_ratio', 0):.2f}{Style.RESET_ALL}, Max Drawdown={draw_color}{drawdown:.2f}%{Style.RESET_ALL}")
+            final_color = Fore.GREEN if final_value > initial_cash else Fore.RED
+            print(f"Final Portfolio Value: {final_color}${final_value:.2f}{Style.RESET_ALL}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Trading bot with backtest mode")
