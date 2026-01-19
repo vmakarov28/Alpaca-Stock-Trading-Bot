@@ -150,7 +150,7 @@ CONFIG = {
 
 
 #pyenv activate pytorch_env
-#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.9.8.py --backtest --force-train
+#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.9.94.py --backtest --force-train
 
 
 
@@ -2046,7 +2046,7 @@ Portfolio Value: ${portfolio_value:.2f}
                 print(f"  {symbol_in_backtest_times}: {format_time(time_in_ms)}")
             print(f"Total Backtest Time: {format_time(total_backtest_time_in_milliseconds)}")
 
-            print(f"Total Time (Training + Backtest): {format_time(total_training_time_in_milliseconds + total_backtest_time_in_milliseconds)}")
+            print(f"Total Time (Loading/Training/Backtest): {format_time(total_training_time_in_milliseconds + total_backtest_time_in_milliseconds)}")
 
             print(f"{Fore.GREEN}Backtest Performance Summary:{Style.RESET_ALL}")
             print(f"{'Symbol':<8} {'Attempt':<8} {'Total Return (%)':<18} {'Sharpe Ratio':<14} {'Max Drawdown (%)':<20} {'Trades':<8} {'Win Rate (%)':<14} {'Accuracy (%)':<14} {'MC Mean Final ($)':<18} {'MC Median Final ($)':<20} {'MC 95% VaR (%)':<15} {'MC Prob Profit (%)':<18}")
