@@ -23,8 +23,8 @@ t scoring, currently defaults to netural. (A simulated place holder)
 <h2 align="center">Backtest results on historical data.</h2>
 
 <p align="center">
- 
   *Note: This test was conducted on data from outside the training and validation set*
+ 
 </p>
 
 <img width="1200" height="600" alt="portfolio_value_graph" src="https://github.com/user-attachments/assets/017ebbfe-162d-4557-90f4-0b2b44e531ae" />
