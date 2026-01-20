@@ -23,6 +23,7 @@ t scoring, currently defaults to netural. (A simulated place holder)
 <h2 align="center">Backtest results on historical data.</h2>
 
 <p align="center">
+ 
   *Note: This test was conducted on data from outside the training and validation set*
 </p>
 
