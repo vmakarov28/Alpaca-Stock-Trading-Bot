@@ -20,8 +20,9 @@ t scoring, currently defaults to netural. (A simulated place holder)
 
 - **Free Tier Compatible:** Optimized for Alpaca's free API tier with retry logic (3 attempts, 1-second delay), data caching (24-hour expiry), and rate-limit handling via tenacity.
 
-Disclaimer: ***It is HIGHLY recommened to use this for educational purposes only. Use paper trading to avoid real financial risk.***
+Backtest results on historical data from outside the training and validation set.
 <img width="1200" height="600" alt="portfolio_value_graph" src="https://github.com/user-attachments/assets/017ebbfe-162d-4557-90f4-0b2b44e531ae" />
+Disclaimer: ***It is HIGHLY recommened to use this for educational purposes only. Use paper trading to avoid real financial risk.***
 
 
 # Installation Steps
