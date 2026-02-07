@@ -23,7 +23,7 @@ t scoring, currently defaults to netural. (A simulated place holder)
 <img width="1200" height="600" alt="portfolio_value_graph" src="https://github.com/user-attachments/assets/eefabf08-5fd7-4401-93c8-a9cdc438d3fc" />
 Simulated BackTest Results from 1/1/2025 to 1/2/2026
 
-### Long Duration Paper Trading Results (Last Updated 2/7/26)
+### Real Life Long Duration Paper Trading Results (Last Updated 2/7/26)
 Starting Value: $100,000
 
 Active Days Running: 122
