@@ -29,9 +29,7 @@ Simulated BackTest Results from 1/1/2025 to 1/2/2026
 Starting Value: $100,000
 
 Active Days Running: 122
-
 Current Portfolio Value: $128,613.36
-
 Lowest Recorded Portfolio Value: $97,185.30
 
 Disclaimer: ***It is HIGHLY recommened to use this for educational purposes only. Use paper trading to avoid real financial risk.***
