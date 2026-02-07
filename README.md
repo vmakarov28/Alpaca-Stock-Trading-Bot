@@ -26,7 +26,7 @@ Simulated BackTest Results from 1/1/2025 to 1/2/2026
 ### Long Duration Paper Trading Results (Last Updated 2/7/26)
 Starting Value: $100,000
 
-Days Running: 118
+Active Days Running: 122
 
 Current Portfolio Value: $128,613.36
 
