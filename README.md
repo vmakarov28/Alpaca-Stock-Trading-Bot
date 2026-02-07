@@ -31,6 +31,7 @@ Days Running: 118
 Current Portfolio Value: $128,613.36
 
 Lowest Recorded Portfolio Value: $97,185.30
+<img width="979" height="251" alt="image" src="https://github.com/user-attachments/assets/13649f49-4902-47fe-8887-311688e55c17" />
 
 Disclaimer: ***It is HIGHLY recommened to use this for educational purposes only. Use paper trading to avoid real financial risk.***
 
