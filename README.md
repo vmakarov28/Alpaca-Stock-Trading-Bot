@@ -20,8 +20,8 @@ t scoring, currently defaults to netural. (A simulated place holder)
 
 - **Free Tier Compatible:** Optimized for Alpaca's free API tier with retry logic (3 attempts, 1-second delay), data caching (24-hour expiry), and rate-limit handling via tenacity.
 
-Simulated BackTest Results from 1/1/2025 to 1/2/2026
 <img width="1200" height="600" alt="portfolio_value_graph" src="https://github.com/user-attachments/assets/eefabf08-5fd7-4401-93c8-a9cdc438d3fc" />
+Simulated BackTest Results from 1/1/2025 to 1/2/2026
 
 ### Long Duration Paper Trading Results (Last Updated 2/7/26)
 Starting Value: $100,000
