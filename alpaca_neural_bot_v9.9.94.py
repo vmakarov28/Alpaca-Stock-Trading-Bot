@@ -1,12 +1,12 @@
-
 # +------------------------------------------------------------------------------+
-# |                            Alpaca Neural Bot v9.9.8                          |
+# |                            Alpaca Neural Bot v9.9.94                         |
 # +------------------------------------------------------------------------------+
 # | Author: Vladimir Makarov                                                     |
 # | Project Start Date: May 9, 2025                                              |
 # | License: GNU Lesser General Public License v2.1                              |
-# | Version: 9.9.8 (Un-Released)                                                 |
+# | Version: 9.9.94 (Un-Released)                                                 |
 # +------------------------------------------------------------------------------+
+# Note: Go to line 59 for the main CONFIG dictionary
 
 import os  # For operating system interactions, like creating directories and handling file paths
 import sys  # For system-specific parameters and functions, such as exiting or accessing argv
@@ -42,10 +42,13 @@ import multiprocessing as mp  # For parallel processing, like training models ac
 import time  # For time-related functions, like sleeping or timing operations (duplicate import)
 import shutil # File transfer
 import tempfile  # Add this import at the top of the file if not already present
-from alpaca.trading.requests import GetOrdersRequest
-from alpaca.trading.enums import OrderSide, TimeInForce
-from alpaca.trading.enums import QueryOrderStatus
-from alpaca.trading.enums import OrderStatus
+from alpaca.trading.requests import GetOrdersRequest # For requesting orders from Alpaca trading API
+from alpaca.trading.enums import OrderSide, TimeInForce # For order side and time-in-force 
+from alpaca.trading.enums import QueryOrderStatus # For querying order status 
+from alpaca.trading.enums import OrderStatus # For order status
+import matplotlib.pyplot as plt  # For plotting the portfolio value graph
+from email.mime.multipart import MIMEMultipart # For constructing multipart email messages
+from email.mime.image import MIMEImage # For attaching images to emails
 
 # Suppress PyTorch warnings
 warnings.filterwarnings('ignore', category=UserWarning)
@@ -96,7 +99,7 @@ CONFIG = {
     'EMAIL_PASSWORD': 'hjdf sstp pyne rotq',  # Password for the email account
     'EMAIL_RECEIVER': ['aiplane.scientist@gmail.com', 'vmakarov28@students.d125.org', 'tchaikovskiy@hotmail.com'],  # List of email recipients
     'SMTP_SERVER': 'smtp.gmail.com',  # SMTP server for email
-    'SMTP_PORT': 587,  #z Port for SMTP server
+    'SMTP_PORT': 587,  # Port for SMTP server
 
     # Logging and Monitoring - Settings for tracking activities
     'LOG_FILE': 'trades.log',  # File for logging trades
@@ -139,7 +142,7 @@ CONFIG = {
 
 
     # Account Management
-    'RESET_ACCOUNT_ON_START': True,   # Set to True only when you want a full reset (closes all positions & cancels orders)
+    'RESET_ACCOUNT_ON_START': False,   # Set to True only when you want a full reset (closes all positions & cancels orders)
     'PAPER_TRADING': True,             # Set to False when going live with real money
     'DESIRED_STARTING_CASH': 200000.00,  # Desired cash for reset
 }
@@ -147,7 +150,7 @@ CONFIG = {
 
 
 #pyenv activate pytorch_env
-#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.9.8.py --backtest --force-train
+#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v9.9.94.py --backtest --force-train
 
 
 
@@ -1052,7 +1055,7 @@ def train_symbol(symbol: str, expected_features: int, force_train: bool) -> Tupl
 def backtest(symbol: str, model: nn.Module, scaler: RobustScaler, df: pd.DataFrame, initial_cash: float,
              stop_loss_atr_multiplier: float, take_profit_atr_multiplier: float, timesteps: int,
              buy_threshold: float, sell_threshold: float, min_holding_period_minutes: int,
-             transaction_cost_per_trade: float) -> Tuple[float, List[float], int, float]:
+             transaction_cost_per_trade: float) -> Tuple[float, List[float], int, float, float, pd.Series]:
     """Run backtest simulation for a symbol using trained model predictions."""
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logger.info(f"Running backtest for {symbol} on device: {device}")
@@ -1136,11 +1139,11 @@ def backtest(symbol: str, model: nn.Module, scaler: RobustScaler, df: pd.DataFra
     logger.info(f"Backtest for {symbol}: starting cash=${cash:.2f}, k_start={k_start}, len(predictions)={len(predictions)}")
     if k_start >= len(predictions):
         logger.warning(f"No data points for backtest of {symbol}")
-        return cash, returns, trade_count, win_rate, 0.0
+        return cash, returns, trade_count, win_rate, 0.0, pd.Series(name='portfolio_value')
     num_backtest_steps = len(predictions) - k_start
     if num_backtest_steps <= 0:
         logger.warning(f"No backtest steps available for {symbol} (num_backtest_steps={num_backtest_steps})")
-        return cash, returns, trade_count, win_rate, 0.0
+        return cash, returns, trade_count, win_rate, 0.0, pd.Series(name='portfolio_value')
 
     # Pre-slice indicators for efficiency; aligns with backtest steps to avoid index errors
     atr = df['ATR'].iloc[timesteps + k_start:timesteps + k_start + num_backtest_steps].values
@@ -1149,6 +1152,9 @@ def backtest(symbol: str, model: nn.Module, scaler: RobustScaler, df: pd.DataFra
     adx = df['ADX'].iloc[timesteps + k_start:timesteps + k_start + num_backtest_steps].values
     volatility = df['Volatility'].iloc[timesteps + k_start:timesteps + k_start + num_backtest_steps].values
     sim_timestamps = timestamps.iloc[k_start:k_start + num_backtest_steps].values
+
+    # Initialize portfolio value tracking
+    portfolio_values = {}  # dict of timestamp: value for this symbol
 
     for local_i in range(num_backtest_steps):
         if local_i % 100 == 0: # Log every 100 steps to avoid spam; helps track progress in long simulations
@@ -1161,6 +1167,10 @@ def backtest(symbol: str, model: nn.Module, scaler: RobustScaler, df: pd.DataFra
         current_adx = adx[local_i]
         current_volatility = volatility[local_i]
         ts = pd.Timestamp(sim_timestamps[local_i])  # Current timestamp for logging
+
+        # Record current portfolio value for this symbol at each step
+        current_value = cash + (position * price)
+        portfolio_values[ts] = current_value
 
         # Skip if volatility too high or trend too weak (ADX low); filters out risky periods
         if current_volatility > max_volatility or current_adx < adx_trend_threshold:
@@ -1226,22 +1236,34 @@ def backtest(symbol: str, model: nn.Module, scaler: RobustScaler, df: pd.DataFra
 
     # Close any open position at end of simulation
     if position > 0:
-        cash += position * prices[-1] - transaction_cost_per_trade
-        ret = (prices[-1] - entry_price) / entry_price
+        last_ts = pd.Timestamp(sim_timestamps[-1])
+        last_price = prices[-1]
+        cash += position * last_price - transaction_cost_per_trade
+        ret = (last_price - entry_price) / entry_price
         returns.append(ret)
         trade_count += 1
         if ret > 0:
             winning_trades += 1
-    win_rate = (winning_trades / trade_count * 100) if trade_count > 0 else 0.0  # Avoid division by zero
-    return cash, returns, trade_count, win_rate, accuracy_percentage
+        # Record final value
+        final_value = cash
+        portfolio_values[last_ts] = final_value
 
-def buy_and_hold_backtest(dfs_backtest: Dict[str, pd.DataFrame], initial_cash: float) -> float:
+    win_rate = (winning_trades / trade_count * 100) if trade_count > 0 else 0.0  # Avoid division by zero
+
+    # Convert dict to pd.Series for easy aggregation later
+    portfolio_series = pd.Series(portfolio_values, name=symbol).sort_index()
+
+    return cash, returns, trade_count, win_rate, accuracy_percentage, portfolio_series
+
+def buy_and_hold_backtest(dfs_backtest: Dict[str, pd.DataFrame], initial_cash: float) -> Tuple[float, Dict[str, pd.Series]]:
     """
     Simulates a buy-and-hold strategy: Buy max shares of each symbol at the start of backtest period using initial cash per symbol,
     hold until the end, and compute final portfolio value. Includes initial transaction cost.
+    Also returns per-symbol time-series of values for graphing.
     """
     initial_per_symbol = initial_cash / len(CONFIG['SYMBOLS'])
     bh_final_value = 0.0
+    bh_series_per_symbol = {}
     for symbol, df in dfs_backtest.items():
         if df.empty or len(df) < 2:
             logger.warning(f"Insufficient data for buy-and-hold on {symbol}; skipping.")
@@ -1251,11 +1273,17 @@ def buy_and_hold_backtest(dfs_backtest: Dict[str, pd.DataFrame], initial_cash: f
             logger.warning(f"Invalid first close price for {symbol}: {first_close}; skipping.")
             continue
         qty = int((initial_per_symbol - CONFIG['TRANSACTION_COST_PER_TRADE']) / first_close)
-        last_close = df['close'].iloc[-1]
-        value = qty * last_close
-        bh_final_value += value
+        if qty <= 0:
+            logger.warning(f"Insufficient qty for buy-and-hold on {symbol}; skipping.")
+            continue
+        # Compute value series: qty * close at each timestamp (after initial buy)
+        bh_values = qty * df['close']
+        bh_series = pd.Series(bh_values.values, index=df.index, name=symbol)
+        bh_series_per_symbol[symbol] = bh_series
+        last_value = bh_series.iloc[-1]
+        bh_final_value += last_value
     logger.info(f"Buy-and-hold final value: ${bh_final_value:.2f}")
-    return bh_final_value
+    return bh_final_value, bh_series_per_symbol
 
 def calculate_performance_metrics(returns: List[float], cash: float, initial_per_symbol: float) -> Dict[str, float]:
     """
@@ -1323,12 +1351,19 @@ def format_email_body(
         body.append(f"  Win Rate: {win_rates.get(symbol, 0.0):.3f}%")
     return "\n".join(body)
 
-def send_email(subject: str, body: str) -> None:
-    """Send an email notification."""
-    msg = MIMEText(body)
+
+def send_email(subject: str, body: str, attachment_path: Optional[str] = None) -> None:
+    """Send an email notification, with optional file attachment."""
+    msg = MIMEMultipart()
     msg['Subject'] = subject
     msg['From'] = CONFIG['EMAIL_SENDER']
     msg['To'] = ', '.join(CONFIG['EMAIL_RECEIVER'])
+    msg.attach(MIMEText(body, 'plain'))
+    if attachment_path and os.path.exists(attachment_path):
+        with open(attachment_path, 'rb') as f:
+            img = MIMEImage(f.read())
+            img.add_header('Content-Disposition', 'attachment', filename=os.path.basename(attachment_path))
+            msg.attach(img)
     with smtplib.SMTP(CONFIG['SMTP_SERVER'], CONFIG['SMTP_PORT']) as server:
         server.starttls()
         server.login(CONFIG['EMAIL_SENDER'], CONFIG['EMAIL_PASSWORD'])
@@ -1552,7 +1587,7 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
                         position_obj = next((pos for pos in open_positions if pos.symbol == symbol), None)
                         if position_obj:
                             qty_owned = int(float(position_obj.qty))
-                            # Fetch entry time from the latest filled BUY order; limits to 50 for efficiency
+                            # Fetch entry time from from the latest filled BUY order; limits to 50 for efficiency
                             order_req = GetOrdersRequest(
                                 status=QueryOrderStatus.CLOSED,
                                 symbols=[symbol],
@@ -1690,10 +1725,24 @@ Portfolio Value: ${portfolio_value:.2f}
                             'price': price,
                             'owned': qty_owned
                         })
+                # Refresh account and positions after trades to reflect post-trade state
+                account = trading_client.get_account()
+                portfolio_value = float(account.equity)
+                # Re-fetch owned for accuracy (in case fills occurred)
+                post_trade_owned = {}
+                for symbol in CONFIG['SYMBOLS']:
+                    try:
+                        position = trading_client.get_open_position(symbol)
+                        post_trade_owned[symbol] = int(float(position.qty))
+                    except APIError:
+                        post_trade_owned[symbol] = 0
+
                 # Summarize decisions and send email; provides overview without individual trade emails
                 summary_body = "Trading Summary:\n"
                 for dec in decisions:
-                    summary_body += f"{dec['symbol']}: {dec['decision']}, Confidence: {dec['confidence']:.3f}, RSI: {dec['rsi']:.2f}, ADX: {dec['adx']:.2f}, Volatility: {dec['volatility']:.2f}, Price: ${dec['price']:.2f}, Owned: {dec['owned']}\n"
+                    # Use post-trade owned if changed
+                    owned_display = post_trade_owned.get(dec['symbol'], dec['owned'])
+                    summary_body += f"{dec['symbol']}: {dec['decision']}, Confidence: {dec['confidence']:.3f}, RSI: {dec['rsi']:.2f}, ADX: {dec['adx']:.2f}, Volatility: {dec['volatility']:.2f}, Price: ${dec['price']:.2f}, Owned: {owned_display}\n"
                 summary_body += f"\nPortfolio Value: ${portfolio_value:.2f}\nNote: Actual trades are executed based on available cash and positions."
                 send_email("Trading Summary", summary_body)
             else:
@@ -1721,7 +1770,7 @@ Portfolio Value: ${portfolio_value:.2f}
         for symbol in CONFIG['SYMBOLS']:
             dfs_backtest[symbol]['Future_Direction'] = (dfs_backtest[symbol]['close'].shift(-CONFIG['LOOK_AHEAD_BARS']) > dfs_backtest[symbol]['close']).astype(int)
 
-        attempt_results = [] # Runs fixed retrain attempts, collects results, selects best by final_value, copies best models/scalers to standard paths.
+        attempt_results = [] # Runs fixed retrain attempts, collects results, selects best by final_value, copies best models to standard paths.
         if CONFIG['ENABLE_RETRAIN_CYCLE'] and force_train:
             effective_max = CONFIG['MAX_RETRAIN_ATTEMPTS']
         else:
@@ -1832,11 +1881,12 @@ Portfolio Value: ${portfolio_value:.2f}
             symbol_results = {}
             trade_counts = {}
             win_rates = {}
+            portfolio_series_per_symbol = {}  # New: Collect per-symbol time-series
             initial_per_symbol = CONFIG['INITIAL_CASH'] / len(CONFIG['SYMBOLS'])
             for symbol in CONFIG['SYMBOLS']:
                 if symbol in models:
                     start_backtest_time_for_symbol = time.perf_counter()
-                    cash, returns, trade_count, win_rate, accuracy_percentage = backtest(
+                    cash, returns, trade_count, win_rate, accuracy_percentage, portfolio_series = backtest(
                         symbol, models[symbol], scalers[symbol], dfs_backtest[symbol], initial_per_symbol,
                         CONFIG['STOP_LOSS_ATR_MULTIPLIER'], CONFIG['TAKE_PROFIT_ATR_MULTIPLIER'],
                         CONFIG['TIMESTEPS'], CONFIG['PREDICTION_THRESHOLD_BUY'], CONFIG['PREDICTION_THRESHOLD_SELL'],
@@ -1848,6 +1898,7 @@ Portfolio Value: ${portfolio_value:.2f}
                     backtest_times_dictionary[symbol] = (end_backtest_time_for_symbol - start_backtest_time_for_symbol) * 1000
                     accuracies_dictionary[symbol] = accuracy_percentage
                     final_value += cash
+                    portfolio_series_per_symbol[symbol] = portfolio_series  # Store series
                     try:
                         symbol_results[symbol] = calculate_performance_metrics(returns, cash, initial_per_symbol)
                         # Add Monte Carlo simulation metrics
@@ -1877,7 +1928,7 @@ Portfolio Value: ${portfolio_value:.2f}
             total_backtest_time_in_milliseconds = (end_total_backtest_time - start_total_backtest_time) * 1000
 
             # Compute buy-and-hold benchmark (Feature 2)
-            bh_final_value = buy_and_hold_backtest(dfs_backtest, initial_cash)
+            bh_final_value, _ = buy_and_hold_backtest(dfs_backtest, initial_cash)
 
             # Check criteria for retrain (for logging/email only)
             max_drawdown_across_symbols = max([res['max_drawdown'] for res in symbol_results.values()]) if symbol_results else 0.0
@@ -1917,7 +1968,8 @@ Portfolio Value: ${portfolio_value:.2f}
                 'backtest_times_dictionary': backtest_times_dictionary,
                 'total_training_time_in_milliseconds': total_training_time_in_milliseconds,
                 'total_backtest_time_in_milliseconds': total_backtest_time_in_milliseconds,
-                'accuracies_dictionary': accuracies_dictionary
+                'accuracies_dictionary': accuracies_dictionary,
+                'portfolio_series_per_symbol': portfolio_series_per_symbol  # New: Store per-symbol series
             })
 
         # After all attempts, select the best model per symbol based on highest total_return for that symbol
@@ -1927,6 +1979,7 @@ Portfolio Value: ${portfolio_value:.2f}
             best_trade_counts = {}
             best_win_rates = {}
             best_accuracies = {}
+            best_portfolio_series_per_symbol = {}  # New: For graph
             # Use the last attempt's bh_final_value (consistent across attempts)
             bh_final_value = attempt_results[-1]['bh_final_value']
             final_value = 0.0
@@ -1941,6 +1994,7 @@ Portfolio Value: ${portfolio_value:.2f}
                 best_trade_counts[symbol] = best_att_results['trade_counts'][symbol]
                 best_win_rates[symbol] = best_att_results['win_rates'][symbol]
                 best_accuracies[symbol] = best_att_results['accuracies_dictionary'][symbol]
+                best_portfolio_series_per_symbol[symbol] = best_att_results['portfolio_series_per_symbol'][symbol]  # New
                 # Compute per-symbol cash and add to overall
                 sym_cash = initial_per_symbol * (1 + best_symbol_results[symbol]['total_return'] / 100)
                 final_value += sym_cash
@@ -1992,7 +2046,7 @@ Portfolio Value: ${portfolio_value:.2f}
                 print(f"  {symbol_in_backtest_times}: {format_time(time_in_ms)}")
             print(f"Total Backtest Time: {format_time(total_backtest_time_in_milliseconds)}")
 
-            print(f"Total Time (Training + Backtest): {format_time(total_training_time_in_milliseconds + total_backtest_time_in_milliseconds)}")
+            print(f"Total Time (Loading/Training/Backtest): {format_time(total_training_time_in_milliseconds + total_backtest_time_in_milliseconds)}")
 
             print(f"{Fore.GREEN}Backtest Performance Summary:{Style.RESET_ALL}")
             print(f"{'Symbol':<8} {'Attempt':<8} {'Total Return (%)':<18} {'Sharpe Ratio':<14} {'Max Drawdown (%)':<20} {'Trades':<8} {'Win Rate (%)':<14} {'Accuracy (%)':<14} {'MC Mean Final ($)':<18} {'MC Median Final ($)':<20} {'MC 95% VaR (%)':<15} {'MC Prob Profit (%)':<18}")
@@ -2010,13 +2064,49 @@ Portfolio Value: ${portfolio_value:.2f}
                     mc_var_color = Fore.RED if metrics_for_symbol['mc_var_95'] > 0 else Fore.GREEN
                     mc_prob_color = Fore.GREEN if metrics_for_symbol['mc_prob_profit'] > 50 else Fore.RED
                     print(f"{symbol:<8} {attempt:<8} {return_color}{metrics_for_symbol['total_return']:<18.3f}{Style.RESET_ALL} {metrics_for_symbol['sharpe_ratio']:<14.3f} {drawdown_color}{metrics_for_symbol['max_drawdown']:<20.3f}{Style.RESET_ALL} {best_trade_counts.get(symbol, 0):<8} {win_rate_color}{best_win_rates.get(symbol, 0):<14.3f}{Style.RESET_ALL} {accuracy_color}{accuracy:<14.3f}{Style.RESET_ALL} {mc_mean_color}{metrics_for_symbol['mc_mean_final_value']:<18.2f}{Style.RESET_ALL} {mc_median_color}{metrics_for_symbol['mc_median_final_value']:<20.2f}{Style.RESET_ALL} {mc_var_color}{metrics_for_symbol['mc_var_95']:<15.3f}{Style.RESET_ALL} {mc_prob_color}{metrics_for_symbol['mc_prob_profit']:<18.3f}{Style.RESET_ALL}")
+            
 
+            
             bh_color = Fore.GREEN if CONFIG['INITIAL_CASH'] < bh_final_value else Fore.RED
             print(f"\nBuy-and-Hold Final Value: {bh_color}${bh_final_value:.2f}{Style.RESET_ALL}")
             print(f"Day Trading {'beats' if final_value > bh_final_value else 'does not beat'} Buy-and-Hold.")
             color = Fore.RED if final_value <= CONFIG['INITIAL_CASH'] else Fore.GREEN
             print(f"\nBacktest completed: Final value: {color}${final_value:.2f}{Style.RESET_ALL}")
 
+            # Recompute BH with series for graphing (static across attempts)
+            bh_final_value, bh_series_per_symbol = buy_and_hold_backtest(dfs_backtest, initial_cash)
+
+            # New: Aggregate portfolio value time-series from best per-symbol series
+            all_series = pd.DataFrame(best_portfolio_series_per_symbol)
+            all_series = all_series.ffill()  # Forward-fill per symbol to handle gaps/misalignments without lookahead bias
+            total_portfolio = all_series.sum(axis=1)  # Sum across symbols by timestamp
+            # Resample to daily: Use last value per day (closing value)
+            daily_portfolio = total_portfolio.resample('D').last().ffill()  # Forward fill for weekends/holidays
+
+            # Aggregate BH series similarly
+            all_bh_series = pd.DataFrame(bh_series_per_symbol)
+            all_bh_series = all_bh_series.ffill()
+            total_bh_portfolio = all_bh_series.sum(axis=1)
+            daily_bh_portfolio = total_bh_portfolio.resample('D').last().ffill()
+
+            # Plot the daily portfolio value with BH comparison
+            plt.figure(figsize=(12, 6))
+            plt.plot(daily_portfolio.index, daily_portfolio.values, label='Day Trading Portfolio', color='blue')
+            plt.plot(daily_bh_portfolio.index, daily_bh_portfolio.values, label='Buy-and-Hold Portfolio', color='green')
+            plt.title('Daily Portfolio Value: Day Trading vs Buy-and-Hold Over Backtest Period')
+            plt.xlabel('Date')
+            plt.ylabel('Portfolio Value ($)')
+            plt.grid(True)
+            plt.legend()
+            plot_file = os.path.join(CONFIG['MODEL_CACHE_DIR'], 'portfolio_value_graph.png')
+            plt.savefig(plot_file)
+            plt.close()  # Close figure to free memory
+            logger.info(f"Portfolio value graph saved to {plot_file}")
+            print(f"{Fore.GREEN}Portfolio value graph saved to {plot_file}{Style.RESET_ALL}")
+            # Add to email
+            email_body += f"\n\nPortfolio Value Graph (Day Trading vs Buy-and-Hold): Attached as portfolio_value_graph.png."
+            send_email("Backtest Completed - Best Results with Graph", email_body, plot_file)
+        
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Trading bot with backtest mode")
     parser.add_argument('--backtest', action='store_true', help="Run in backtest-only mode")

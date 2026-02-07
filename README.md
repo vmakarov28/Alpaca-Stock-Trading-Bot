@@ -15,11 +15,12 @@ Alpaca Neural Bot v10.0.0 is an advanced AI-powered stock trading bot that uses 
 
 - **GPU Acceleration:** Leverages PyTorch with CUDA for accelerated training and inference on RTX 5080, including memory management via torch.cuda.empty_cache() after parallel sessions.
 
-- **Sentiment Analysis:** Has a framework to utilizes DistilBERT (distilbert-base-uncased-finetuned-sst-2-english) via Hugging Face Transformers for news sentiment scoring, currently defaults to netural. (A simulated place holder)
+- **Sentiment Analysis:** Has a framework to utilizes DistilBERT (distilbert-base-uncased-finetuned-sst-2-english) via Hugging Face Transformers for news sentiment
+t scoring, currently defaults to netural. (A simulated place holder)
 
 - **Free Tier Compatible:** Optimized for Alpaca's free API tier with retry logic (3 attempts, 1-second delay), data caching (24-hour expiry), and rate-limit handling via tenacity.
 
-### Long Duration Paper Trading Results (Last Updated 2/3/26)
+### Long Duration Paper Trading Results (Last Updated 2/7/26)
 Starting Value: $100,000
 
 Days Running: 118
@@ -34,7 +35,7 @@ Disclaimer: ***It is HIGHLY recommened to use this for educational purposes only
 # Installation Steps
 Follow these steps in order to set up the environment. 
 
-*Note: All commands after step 2 are for WSL/Ubuntu terminal.*
+**Note:** All commands after step 2 are for WSL/Ubuntu terminal.
 
 ## Prerequisites
 
@@ -326,6 +327,6 @@ GNU Lesser General Public License v2.1. See LICENSE for details.
 
 Author: Vladimir Makarov
 
-Most recent change: 2/03/2026
+Most recent change: 2/07/2026
 
 GitHub: vmakarov28/Alpaca-Stock-Trading-Bot
