@@ -1,6 +1,6 @@
 # Alpaca Stock Trading System
 
-Alpaca Neural Bot v10.0.0 is an advanced AI-powered stock trading bot that uses a CNN-LSTM neural network built with PyTorch to predict market trends and execute trades via the Alpaca API, optimized for GPU acceleration on NVIDIA RTX 5080. It incorporates technical indicators from TA-Lib (such as RSI, MACD, ATR, and ADX), sentiment analysis via Hugging Face Transformers, and robust risk management features including ATR-based stops, trailing stops, drawdown limits, volatility filters, and minimum holding periods. The bot supports comprehensive backtesting with metrics like Sharpe ratio, max drawdown, Monte Carlo simulations, and buy-and-hold benchmarks on historical data from 2015 to the current date (January 18, 2026), alongside live paper trading with email notifications and multiprocessing for efficient training across multiple symbols.
+Alpaca Neural Bot v10.0.0 is an advanced AI-powered stock trading bot that uses a CNN-LSTM neural network built with PyTorch to predict market trends and execute trades via the Alpaca API, optimized for GPU acceleration on NVIDIA RTX 5080. It incorporates technical indicators from TA-Lib (such as RSI, MACD, ATR, and ADX), sentiment analysis via Hugging Face Transformers, and robust risk management features including ATR-based stops, trailing stops, drawdown limits, volatility filters, and minimum holding periods. The bot supports comprehensive backtesting with metrics like Sharpe ratio, max drawdown, Monte Carlo simulations, and buy-and-hold benchmarks on historical data from 2015 to the current date (Feburary 03, 2026), alongside live paper trading with email notifications and multiprocessing for efficient training across multiple symbols.
  
 ## System Overview
 - **Neural Network Prediction:** Employs a CNN-LSTM model (Conv1D layers followed by LSTM) to predict future price directions over LOOK_AHEAD_BARS (7 bars) based on 30-timestep sequences of 23 features from historical and real-time data.
@@ -20,15 +20,16 @@ t scoring, currently defaults to netural. (A simulated place holder)
 
 - **Free Tier Compatible:** Optimized for Alpaca's free API tier with retry logic (3 attempts, 1-second delay), data caching (24-hour expiry), and rate-limit handling via tenacity.
 
-<h2 align="center">Backtest results on historical data.</h2>
+### Long Duration Paper Trading Results (Last Updated 2/7/26)
+Starting Value: $100,000
 
-<p align="center">
-  Note: This test was conducted on data outside the training and validation sets
-</p>
+Days Running: 118
 
-<img width="1200" height="600" alt="portfolio_value_graph" src="https://github.com/user-attachments/assets/017ebbfe-162d-4557-90f4-0b2b44e531ae" />
+Current Portfolio Value: $128,613.36
 
-Disclaimer: ***It is recommened to use this for educational purposes only. Use paper trading to avoid real financial risk.***
+Lowest Recorded Portfolio Value: $97,185.30
+
+Disclaimer: ***It is HIGHLY recommened to use this for educational purposes only. Use paper trading to avoid real financial risk.***
 
 
 # Installation Steps
@@ -326,6 +327,6 @@ GNU Lesser General Public License v2.1. See LICENSE for details.
 
 Author: Vladimir Makarov
 
-Most recent change: 1/18/2026
+Most recent change: 2/07/2026
 
 GitHub: vmakarov28/Alpaca-Stock-Trading-Bot
