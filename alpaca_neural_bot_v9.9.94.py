@@ -91,13 +91,13 @@ CONFIG = {
     'NUM_PARALLEL_WORKERS': 4,  # Number of parallel workers for symbol training (tune based on VRAM/CPU cores)
 
     # API and Authentication - Credentials for API access
-    'ALPACA_API_KEY': 'PK442T0XBG553SK7IZ5B',  # API key for Alpaca
-    'ALPACA_SECRET_KEY': '2upYWNzeRIGGRHk1FXKVtDpdSbgqlqmP3Q0flW8Z',  # Secret key for Alpaca
+    'ALPACA_API_KEY': 'RELPLACEME',  # API key for Alpaca
+    'ALPACA_SECRET_KEY': 'RELPLACEME',  # Secret key for Alpaca
 
     # Email Notifications - Configuration for sending email alerts
-    'EMAIL_SENDER': 'alpaca.ai.tradingbot@gmail.com',  # Email address for sending notifications
-    'EMAIL_PASSWORD': 'hjdf sstp pyne rotq',  # Password for the email account
-    'EMAIL_RECEIVER': ['aiplane.scientist@gmail.com', 'vmakarov28@students.d125.org', 'tchaikovskiy@hotmail.com'],  # List of email recipients
+    'EMAIL_SENDER': 'RELPLACEME@gmail.com',  # Email address for sending notifications
+    'EMAIL_PASSWORD': 'RELPLACEME',  # Password for the email account
+    'EMAIL_RECEIVER': ['RELPLACEME@gmail.com', 'RELPLACEME@students.d125.org', 'RELPLACEME@hotmail.com'],  # List of email recipients
     'SMTP_SERVER': 'smtp.gmail.com',  # SMTP server for email
     'SMTP_PORT': 587,  # Port for SMTP server
 
