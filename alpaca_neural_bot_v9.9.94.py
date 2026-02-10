@@ -1,10 +1,10 @@
 # +------------------------------------------------------------------------------+
-# |                            Alpaca Neural Bot v9.9.94                         |
+# |                            Alpaca Neural Bot v10.0.0                         |
 # +------------------------------------------------------------------------------+
 # | Author: Vladimir Makarov                                                     |
 # | Project Start Date: May 9, 2025                                              |
 # | License: GNU Lesser General Public License v2.1                              |
-# | Version: 9.9.94 (Un-Released)                                                 |
+# | Version: 10.0.0 (Public)                                                     |
 # +------------------------------------------------------------------------------+
 # Note: Go to line 59 for the main CONFIG dictionary
 
