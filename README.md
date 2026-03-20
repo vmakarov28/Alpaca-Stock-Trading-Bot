@@ -4,6 +4,10 @@ This is v10.00.00 of the project formly known as Alpaca Neural Bot (v0-v9). Deep
 
 Whether you're running realistic backtests or live/paper trading, the bot handles everything from data fetching and model training to execution and notifications — all with graphs and performance reports.
 
+<image-card alt="Python" src="https://img.shields.io/badge/Python-3.10-blue" ></image-card>
+<image-card alt="PyTorch" src="https://img.shields.io/badge/PyTorch-2.0-orange" ></image-card>
+<image-card alt="Stars" src="https://img.shields.io/github/stars/vmakarov28/Alpaca-Stock-Trading-Bot?style=social" ></image-card>
+
 ### Key Features
 
 - **Neural Network Prediction**: LSTM model with Multihead Attention that analyzes 30-timestep sequences of **31 features** (including RSI, MACD, ATR, ADX, volume profile, multi-timeframe indicators, and earnings/sentiment proxies) to forecast price direction over the next 21 bars (~5 hours at 15-minute intervals).
