@@ -25,7 +25,7 @@ Whether you're running realistic backtests or live/paper trading, the bot handle
 
 ---
 
-## How It Works
+### How It Works
 
 The Alpaca Neural Bot follows a three-stage process: **training & backtesting** first, then **live trading**.
 
