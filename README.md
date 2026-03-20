@@ -1,24 +1,43 @@
-# Alpaca Stock Trading System
+# Alpaca Neural Bot v10.00.01
 
-Alpaca Neural Bot v10.0.0 is an advanced AI-powered stock trading bot that uses a CNN-LSTM neural network built with PyTorch to predict market trends and execute trades via the Alpaca API, optimized for GPU acceleration on NVIDIA RTX 5080. It incorporates technical indicators from TA-Lib (such as RSI, MACD, ATR, and ADX), sentiment analysis via Hugging Face Transformers, and robust risk management features including ATR-based stops, trailing stops, drawdown limits, volatility filters, and minimum holding periods. The bot supports comprehensive backtesting with metrics like Sharpe ratio, max drawdown, Monte Carlo simulations, and buy-and-hold benchmarks on historical data from 2015 to the current date (Feburary 03, 2026), alongside live paper trading with email notifications and multiprocessing for efficient training across multiple symbols.
- 
-## System Overview
-- **Neural Network Prediction:** Employs a CNN-LSTM model (Conv1D layers followed by LSTM) to predict future price directions over LOOK_AHEAD_BARS (7 bars) based on 30-timestep sequences of 23 features from historical and real-time data.
+**Alpaca Neural Bot** is a smart, AI-powered stock trading system that uses deep learning to predict short-term price moves and automatically place trades through the Alpaca API. Built with PyTorch and highly optimized for NVIDIA GPUs (especially the RTX 5080), it combines technical analysis, market regime detection, and strict risk controls to make trading decisions.
 
-- Model Training: Trains the CNN-LSTM model per symbol using Adam optimizer (learning rate 0.001), BCEWithLogitsLoss, early stopping, and ReduceLROnPlateau scheduler (patience 5, factor 0.5) over customizable epochs with customizable batch size; supports data augmentation via noise addition; in backtest mode, enables an automated retraining cycle (up to X attempts) that retrains until performance criteria are met, then selects and copies the best attempt's models/scalers across all attempts.
+Whether you're running realistic backtests or live/paper trading, the bot handles everything from data fetching and model training to execution and notifications — all with clean graphs and detailed performance reports.
 
-- **Backtesting:** Simulates trades across multiple symbols between a specifyable data, and today. Includes transaction costs, ATR-based stops/profits, min holding periods, performance metrics (Sharpe ratio, max drawdown, win rates, accuracies), Monte Carlo simulations (50,000 runs), buy-and-hold benchmarks. 
+### Key Features
 
-- **Live Trading:** Executes market orders during open market hours with email notifications for individual trades and daily summaries.
+- **Neural Network Prediction**: LSTM model with Multihead Attention that analyzes 30-timestep sequences of **32 features** (including RSI, MACD, ATR, ADX, volume profile, multi-timeframe indicators, and earnings/sentiment proxies) to forecast price direction over the next 21 bars (~5 hours at 15-minute intervals).
+- **Market Regime Detection**: Hidden Markov Model (HMM) that identifies 6 different market states (Calm Bull, Volatile Bull, etc.) to improve signal quality.
+- **Ensemble Power**: Combines LSTM predictions with XGBoost for more reliable buy/sell decisions.
+- **Pairs Trading (Stat Arb)**: Built-in market-neutral strategy using cointegrated pairs (AAPL-MSFT, NVDA-AMD, etc.) with spread and z-score logic.
+- **Strong Risk Management**: ATR-based stop-loss and take-profit, trailing stops, volatility filters, RSI/ADX thresholds, maximum drawdown protection, and minimum holding periods.
+- **Advanced Backtesting**: Automatically runs multiple training attempts (up to 15), selects the absolute best models per symbol, and reports Sharpe ratio, max drawdown, win rate, accuracy, Monte Carlo simulations (50,000 runs), and direct comparison to Buy-and-Hold.
+- **Live & Paper Trading**: Executes real market orders during market hours, includes real-time regime detection, and sends email alerts for every trade plus daily summaries.
+- **Beautiful Performance Graphs**: Shows three lines — **Day Trading equity curve (blue)**, **Buy-and-Hold (green)**, and a dashed red **Initial Cash breakeven line** — so you instantly see when you're in profit.
 
-- **Multi-Symbol Support:** Handles trading for multiple stocks (e.g., SPY, MSFT, AAPL, AMZN, NVDA, META, GOOGL) with parallel multiprocessing (4 workers) for model training and independent backtesting per symbol.
+### How It Works (in plain terms)
 
-- **GPU Acceleration:** Leverages PyTorch with CUDA for accelerated training and inference on RTX 5080, including memory management via torch.cuda.empty_cache() after parallel sessions.
+1. Fetches clean historical and real-time data from Alpaca (with caching and retries)
+2. Adds 32 technical indicators + neutral sentiment placeholder
+3. Trains one LSTM+Attention model per symbol on GPU (parallelized, memory-optimized)
+4. Runs full backtests with realistic costs and risk rules
+5. Automatically retrains until strong performance criteria are met, then keeps the best models
+6. In live mode: checks every 15 minutes, decides Buy/Hold/Sell, and executes through Alpaca
 
-- **Sentiment Analysis:** Has a framework to utilizes DistilBERT (distilbert-base-uncased-finetuned-sst-2-english) via Hugging Face Transformers for news sentiment
-t scoring, currently defaults to netural. (A simulated place holder)
+### Current Status (March 2026)
 
-- **Free Tier Compatible:** Optimized for Alpaca's free API tier with retry logic (3 attempts, 1-second delay), data caching (24-hour expiry), and rate-limit handling via tenacity.
+- Supports 8 major stocks + 4 pairs
+- Fully working live/paper trading with email alerts
+- Continuous daily equity tracking (no more flat blue line!)
+- Optimized for Alpaca’s free tier (caching, retries, rate-limit friendly)
+- Runs great on consumer hardware with an RTX 5080
+
+---
+
+**Note**: This is an educational and research project. Always backtest thoroughly, start with paper trading, and never risk money you can’t afford to lose.
+
+---
+
 
 ### Long Duration Paper Trading Results (Last Updated 2/7/26)
 Starting Value: $100,000
