@@ -54,7 +54,7 @@ The system continuously monitors portfolio drawdown and enforces conservative po
 
 ---
 
-### Simulated BackTest Results from 1/1/2025 to 1/2/2026
+### Simulated BackTest Results from 1/1/2025 to 3/19/2026
 <img width="1200" height="600" alt="After Changes" src="https://github.com/user-attachments/assets/c16be814-5ef5-4a6a-92a6-44d8bacb93ae" />
 Simulated BackTest Results from 1/1/2025 to 3/13/2026
 
