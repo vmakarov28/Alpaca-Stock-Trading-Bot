@@ -15,16 +15,32 @@ Whether you're running realistic backtests or live/paper trading, the bot handle
 - **Live & Paper Trading**: Executes real market orders during market hours, includes real-time regime detection, and sends email alerts for every trade plus daily summaries.
 - **Performance Graphing**: Shows three lines — **Day Trading equity curve (blue)**, **Buy-and-Hold (green)**, and a dashed red **Initial Cash breakeven line** — so you instantly see when you're in profit and how alternative stratigies preform.
 
-### How It Works (in plain terms)
+## How It Works
 
-1. Fetches clean historical and real-time data from Alpaca (with caching and retries)
-2. Adds 32 technical indicators + neutral sentiment placeholder
-3. Trains one LSTM+Attention model per symbol on GPU (parallelized, memory-optimized)
-4. Runs full backtests with realistic costs and risk rules (on new never before seen data)
-5. Automatically retrains until strong performance criteria are met, then keeps the best models
-6. In live mode: checks every 15 minutes, decides Buy/Hold/Sell, and executes through Alpaca
+The Alpaca Neural Bot follows a clear two-stage process: **training & backtesting** first, then **live trading**.
 
-### Current Status (March 2026)
+### 1. Training & Backtesting Phase
+1. **Data Collection** — Downloads years of 15-minute historical bars from the Alpaca API (with smart caching and retries).
+2. **Feature Engineering** — Calculates 31 technical indicators (RSI, MACD, ATR, ADX, Bollinger Bands, volume profile, multi-timeframe data, etc.) plus sentiment.
+3. **Model Training** — Trains an LSTM + Multihead Attention neural network on GPU for each symbol. Also builds a Hidden Markov Model (HMM) for market regime detection and an XGBoost ensemble.
+4. **Automated Optimization** — Runs up to 15 full training attempts, backtests each one, and automatically keeps the best-performing models per symbol.
+5. **Realistic Simulation** — Performs detailed backtesting with ATR-based stops, trailing stops, volatility filters, pairs trading, transaction costs, and 50,000 Monte Carlo simulations. Generates a clear equity curve graph comparing your strategy to Buy-and-Hold.
+
+### 2. Live Trading Phase
+Once the best models are ready:
+1. Loads the trained models and scalers from disk.
+2. Every 15 minutes (while the market is open):
+   - Fetches the latest price data
+   - Updates all 31 indicators and detects the current market regime
+   - Runs the LSTM + XGBoost ensemble to generate a confidence-weighted prediction
+   - Applies strict risk filters (confidence threshold, RSI, ADX, volatility)
+   - Decides **Buy**, **Sell**, or **Hold**
+   - Executes market orders through Alpaca (paper or live)
+   - Sends real-time email alerts for every trade and daily summaries
+
+The system continuously monitors portfolio drawdown and enforces conservative position sizing and risk rules at all times.
+
+## Current Status (March 2026)
 
 - Supports 8 major stocks + 4 pairs
 - Fully working live/paper trading with email alerts
