@@ -19,14 +19,14 @@ Whether you're running realistic backtests or live/paper trading, the bot handle
 
 The Alpaca Neural Bot follows a clear two-stage process: **training & backtesting** first, then **live trading**.
 
-#### 1. Training & Backtesting Phase
+### 1. Training & Backtesting Phase
 1. **Data Collection** — Downloads years of 15-minute historical bars from the Alpaca API (with smart caching and retries).
 2. **Feature Engineering** — Calculates 31 technical indicators (RSI, MACD, ATR, ADX, Bollinger Bands, volume profile, multi-timeframe data, etc.) plus sentiment.
 3. **Model Training** — Trains an LSTM + Multihead Attention neural network on GPU for each symbol. Also builds a Hidden Markov Model (HMM) for market regime detection and an XGBoost ensemble.
 4. **Automated Optimization** — Runs up to 15 full training attempts, backtests each one, and automatically keeps the best-performing models per symbol.
 5. **Realistic Simulation** — Performs detailed backtesting with ATR-based stops, trailing stops, volatility filters, pairs trading, transaction costs, and 50,000 Monte Carlo simulations. Generates a clear equity curve graph comparing your strategy to Buy-and-Hold.
 
-#### 2. Live Trading Phase
+### 2. Live Trading Phase
 Once the best models are ready:
 1. Loads the trained models and scalers from disk.
 2. Every 15 minutes (while the market is open):
