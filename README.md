@@ -13,7 +13,7 @@ Whether you're running realistic backtests or live/paper trading, the bot handle
 - **Strong Risk Management**: ATR-based stop-loss and take-profit, trailing stops, volatility filters, RSI/ADX thresholds, maximum drawdown protection, and minimum holding periods.
 - **Advanced Backtesting**: Automatically runs multiple training attempts, selects the absolute best models per symbol, and reports Sharpe ratio, max drawdown, win rate, accuracy, Monte Carlo simulations, and direct comparison to Buy-and-Hold stratiges.
 - **Live & Paper Trading**: Executes real market orders during market hours, includes real-time regime detection, and sends email alerts for every trade plus daily summaries.
-- **Beautiful Performance Graphs**: Shows three lines — **Day Trading equity curve (blue)**, **Buy-and-Hold (green)**, and a dashed red **Initial Cash breakeven line** — so you instantly see when you're in profit.
+- **Performance Graphing**: Shows three lines — **Day Trading equity curve (blue)**, **Buy-and-Hold (green)**, and a dashed red **Initial Cash breakeven line** — so you instantly see when you're in profit and how alternative stratigies preform.
 
 ### How It Works (in plain terms)
 
