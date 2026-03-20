@@ -6,7 +6,7 @@ Whether you're running realistic backtests or live/paper trading, the bot handle
 
 ### Key Features
 
-- **Neural Network Prediction**: LSTM model with Multihead Attention that analyzes 30-timestep sequences of **32 features** (including RSI, MACD, ATR, ADX, volume profile, multi-timeframe indicators, and earnings/sentiment proxies) to forecast price direction over the next 21 bars (~5 hours at 15-minute intervals).
+- **Neural Network Prediction**: LSTM model with Multihead Attention that analyzes 30-timestep sequences of **31 features** (including RSI, MACD, ATR, ADX, volume profile, multi-timeframe indicators, and earnings/sentiment proxies) to forecast price direction over the next 21 bars (~5 hours at 15-minute intervals).
 - **Market Regime Detection**: Hidden Markov Model (HMM) that identifies 6 different market states (Calm Bull, Volatile Bull, etc.) to improve signal quality.
 - **Ensemble Power**: Combines LSTM predictions with XGBoost for more reliable buy/sell decisions.
 - **Pairs Trading**: Built-in market-neutral strategy using cointegrated pairs (AAPL-MSFT, NVDA-AMD, etc.) with spread and z-score logic.
