@@ -22,9 +22,9 @@ The Alpaca Neural Bot follows a three-stage process: **training & backtesting** 
 ### 1. Training & Backtesting Phase
 1. **Data Collection** — Downloads years of 15-minute historical bars from the Alpaca API (with smart caching and retries).
 2. **Feature Engineering** — Calculates 31 technical indicators (RSI, MACD, ATR, ADX, Bollinger Bands, volume profile, multi-timeframe data, etc.) plus sentiment.
-3. **Model Training** — Trains an LSTM + Multihead Attention neural network on GPU for each symbol. Also builds a Hidden Markov Model (HMM) for market regime detection and an XGBoost ensemble.
-4. **Automated Optimization** — Runs up to 15 full training attempts, backtests each one, and automatically keeps the best-performing models per symbol.
-5. **Realistic Simulation** — Performs detailed backtesting with ATR-based stops, trailing stops, volatility filters, pairs trading, transaction costs, and 50,000 Monte Carlo simulations. Generates a clear equity curve graph comparing your strategy to Buy-and-Hold.
+3. **Model Training** — Trains an LSTM + Multihead Attention neural network on GPU for each symbol. Also builds a Hidden Markov Model (HMM) for market regime detection and an XGBoost ensemble on CPU for voting style decision making.
+4. **Automated Optimization** — Runs repeated full training attempts, backtests each one, and automatically keeps the best-performing models per symbol.
+5. **Realistic Simulation** — Performs detailed backtesting with ATR-based stops, trailing stops, volatility filters, pairs trading, transaction costs, and Monte Carlo simulations. Generates a clear graph comparing Day Trading to Buy-and-Hold.
 
 ### 2. Live Trading Phase
 Once the best models are ready:
@@ -35,7 +35,7 @@ Once the best models are ready:
    - Runs the LSTM + XGBoost ensemble to generate a confidence-weighted prediction
    - Applies strict risk filters (confidence threshold, RSI, ADX, volatility)
    - Decides **Buy**, **Sell**, or **Hold**
-   - Executes market orders through Alpaca (paper or live)
+   - Executes market orders through Alpaca
    - Sends real-time email alerts for every trade and daily summaries
 
 The system continuously monitors portfolio drawdown and enforces conservative position sizing and risk rules at all times.
