@@ -40,6 +40,37 @@ Once the best models are ready:
 
 The system continuously monitors portfolio drawdown and enforces conservative position sizing and risk rules at all times.
 
+### Current Status (March 2026)
+
+- Supports 8 major stocks + 4 pairs
+- Fully working live/paper trading with email alerts
+- Continuous daily equity tracking (no more flat blue line!)
+- Optimized for Alpaca’s free tier (caching, retries, rate-limit friendly)
+- Runs on consumer hardware with an RTX 50 and 40 series
+
+---
+
+**Note**: This is an educational and research project. Always backtest thoroughly, start with paper trading, and never risk money you can’t afford to lose.
+
+---
+
+### Simulated BackTest Results from 1/1/2025 to 1/2/2026
+<img width="1200" height="600" alt="portfolio_value_graph" src="https://github.com/user-attachments/assets/eefabf08-5fd7-4401-93c8-a9cdc438d3fc" />
+Simulated BackTest Results from 1/1/2025 to 1/2/2026
+
+### Real Life Long Duration Paper Trading Results (Last Updated 2/7/26)
+<img width="979" height="251" alt="image" src="https://github.com/user-attachments/assets/13649f49-4902-47fe-8887-311688e55c17" />
+
+- Starting Value: $100,000
+  
+- Active Days Running: 122
+  
+- Current Portfolio Value: $128,613.36
+  
+- Lowest Recorded Portfolio Value: $97,185.30 
+
+Disclaimer: ***It is HIGHLY recommened to use this for educational purposes only. Use paper trading to avoid real financial risk.***
+
 ## The 31 Technical Features Used by the Model
 
 The neural network looks at **31 different features** every 15 minutes to decide whether the stock is likely to go up or down in the next ~5 hours. Here's what each one means and what it tells the model:
@@ -88,38 +119,6 @@ The neural network looks at **31 different features** every 15 minutes to decide
 - **Sentiment** — News sentiment score from DistilBERT (currently neutral by default)
 
 These 31 features give the model a rich, multi-angle view of the market — price action, momentum, volatility, volume pressure, and even a hint of sentiment. This is why the bot can make smarter decisions than simple rule-based systems.
-
-### Current Status (March 2026)
-
-- Supports 8 major stocks + 4 pairs
-- Fully working live/paper trading with email alerts
-- Continuous daily equity tracking (no more flat blue line!)
-- Optimized for Alpaca’s free tier (caching, retries, rate-limit friendly)
-- Runs on consumer hardware with an RTX 50 and 40 series
-
----
-
-**Note**: This is an educational and research project. Always backtest thoroughly, start with paper trading, and never risk money you can’t afford to lose.
-
----
-
-### Simulated BackTest Results from 1/1/2025 to 1/2/2026
-<img width="1200" height="600" alt="portfolio_value_graph" src="https://github.com/user-attachments/assets/eefabf08-5fd7-4401-93c8-a9cdc438d3fc" />
-Simulated BackTest Results from 1/1/2025 to 1/2/2026
-
-### Real Life Long Duration Paper Trading Results (Last Updated 2/7/26)
-<img width="979" height="251" alt="image" src="https://github.com/user-attachments/assets/13649f49-4902-47fe-8887-311688e55c17" />
-
-- Starting Value: $100,000
-  
-- Active Days Running: 122
-  
-- Current Portfolio Value: $128,613.36
-  
-- Lowest Recorded Portfolio Value: $97,185.30 
-
-Disclaimer: ***It is HIGHLY recommened to use this for educational purposes only. Use paper trading to avoid real financial risk.***
-
 
 # Installation Steps
 Follow these steps in order to set up the environment. 
