@@ -4,9 +4,11 @@ This is v10.00.00 of the project formly known as Alpaca Neural Bot (v0-v9). Deep
 
 Whether you're running realistic backtests or live/paper trading, the bot handles everything from data fetching and model training to execution and notifications — all with graphs and performance reports.
 
-[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-ee4c2c?style=flat-square&logo=pytorch&logoColor=white)](https://pytorch.org/)
-![License](https://img.shields.io/github/license/vmakarov28/Alpaca-Stock-Trading-Bot?style=flat-square)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)](https://pytorch.org/)
+[![CUDA](https://img.shields.io/badge/CUDA-11.8+-76B900?style=flat-square&logo=nvidia&logoColor=white)](https://developer.nvidia.com/cuda-toolkit)
+[![GPU Acceleration](https://img.shields.io/badge/GPU-RTX%205080-76B900?style=flat-square&logo=nvidia&logoColor=white)](https://www.nvidia.com/)
+[![TA-Lib](https://img.shields.io/badge/TA--Lib-Enabled-FF6F00?style=flat-square&logo=python&logoColor=white)](https://ta-lib.org/)
 
 ### Key Features
 
