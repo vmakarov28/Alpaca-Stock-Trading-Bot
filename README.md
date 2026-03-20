@@ -46,7 +46,7 @@ The system continuously monitors portfolio drawdown and enforces conservative po
 - Fully working live/paper trading with email alerts
 - Continuous daily equity tracking (no more flat blue line!)
 - Optimized for Alpaca’s free tier (caching, retries, rate-limit friendly)
-- Runs great on consumer hardware with an RTX 5080
+- Runs on consumer hardware with an RTX 50 and 40 series
 
 ---
 
