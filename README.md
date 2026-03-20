@@ -20,7 +20,7 @@ Whether you're running realistic backtests or live/paper trading, the bot handle
 1. Fetches clean historical and real-time data from Alpaca (with caching and retries)
 2. Adds 32 technical indicators + neutral sentiment placeholder
 3. Trains one LSTM+Attention model per symbol on GPU (parallelized, memory-optimized)
-4. Runs full backtests with realistic costs and risk rules
+4. Runs full backtests with realistic costs and risk rules (on new never before seen data)
 5. Automatically retrains until strong performance criteria are met, then keeps the best models
 6. In live mode: checks every 15 minutes, decides Buy/Hold/Sell, and executes through Alpaca
 
