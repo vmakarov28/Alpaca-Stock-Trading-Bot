@@ -1,4 +1,4 @@
-# Deep Trader One
+# Deep Trader Ten
 
 This is v10.0.0 of an AI-powered stock trading system that uses deep learning to predict short-term price moves and automatically place trades through the Alpaca API. Built with PyTorch and highly optimized for NVIDIA GPUs, it combines technical analysis, market regime detection, and strict risk controls to make trading decisions.
 
