@@ -55,8 +55,8 @@ The system continuously monitors portfolio drawdown and enforces conservative po
 ---
 
 ### Simulated BackTest Results from 1/1/2025 to 1/2/2026
-<img width="1200" height="600" alt="portfolio_value_graph" src="https://github.com/user-attachments/assets/eefabf08-5fd7-4401-93c8-a9cdc438d3fc" />
-Simulated BackTest Results from 1/1/2025 to 1/2/2026
+<img width="1200" height="600" alt="After Changes" src="https://github.com/user-attachments/assets/c16be814-5ef5-4a6a-92a6-44d8bacb93ae" />
+Simulated BackTest Results from 1/1/2025 to 3/13/2026
 
 ### Real Life Long Duration Paper Trading Results (Last Updated 2/7/26)
 <img width="979" height="251" alt="image" src="https://github.com/user-attachments/assets/13649f49-4902-47fe-8887-311688e55c17" />
