@@ -8,6 +8,7 @@ Whether you're running realistic backtests or live/paper trading, the bot handle
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![CUDA](https://img.shields.io/badge/CUDA-11.8+-76B900?style=flat-square&logo=nvidia&logoColor=white)](https://developer.nvidia.com/cuda-toolkit)
 [![TA-Lib](https://img.shields.io/badge/TA--Lib-Analysis-FF6F00?style=flat-square&logo=python&logoColor=white)](https://ta-lib.org/)
+[<image-card alt="NVIDIA" src="https://img.shields.io/badge/NVIDIA-Powered-76B900?style=flat-square&logo=nvidia&logoColor=white" ></image-card>](https://www.nvidia.com/)
 [<image-card alt="Alpaca API" src="https://img.shields.io/badge/Alpaca%20API-Integrated-00BFFF?style=flat-square&logo=alpaca&logoColor=white" ></image-card>](https://alpaca.markets/)
 
 ### Key Features
