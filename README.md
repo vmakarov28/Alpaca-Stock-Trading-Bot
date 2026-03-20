@@ -81,6 +81,7 @@ Simulated BackTest Results from 1/1/2025 to 3/13/2026
 
 Disclaimer: ***It is HIGHLY recommened to use this for educational purposes only. Use paper trading to avoid real financial risk.***
 
+---
 
 # Installation Steps
 Follow these steps in order to set up the environment. 
