@@ -80,7 +80,7 @@ Follow these steps in order to set up the environment.
 ## Prerequisites
 
 - Drivers: Install the latest nvidia drivers from nvdia app for your GPU.
-- Hardware: NVIDIA GPU with at least 16GB VRAM for efficient training. (Confirmed to work properly on RTX 5080 but other 50 series and 40 series card are likely to work).
+- Hardware: NVIDIA GPU with at least 16GB VRAM for efficient training. (Confirmed to work properly on RTX 5080 but other 50 series and 40 series cards are likely to work).
 - Operating System: Windows Subsystem for Linux (WSL2) on Windows 11 or Native Ubuntu 22.04+
 - Alpaca Account: Free account with paper trading enabled. Get API keys from Alpaca Dashboard.
 - Gmail Account: For email notifications (enable "Less secure app access" or use app password).
