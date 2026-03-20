@@ -1,24 +1,107 @@
-# Alpaca Stock Trading System
+# Alpaca Neural Bot v10.00.01
 
-Alpaca Neural Bot v10.0.0 is an advanced AI-powered stock trading bot that uses a CNN-LSTM neural network built with PyTorch to predict market trends and execute trades via the Alpaca API, optimized for GPU acceleration on NVIDIA RTX 5080. It incorporates technical indicators from TA-Lib (such as RSI, MACD, ATR, and ADX), sentiment analysis via Hugging Face Transformers, and robust risk management features including ATR-based stops, trailing stops, drawdown limits, volatility filters, and minimum holding periods. The bot supports comprehensive backtesting with metrics like Sharpe ratio, max drawdown, Monte Carlo simulations, and buy-and-hold benchmarks on historical data from 2015 to the current date (March 19, 2026), alongside live paper trading with email notifications and multiprocessing for efficient training across multiple symbols.
- 
-## System Overview
-- **Neural Network Prediction:** Employs a CNN-LSTM model (Conv1D layers followed by LSTM) to predict future price directions over LOOK_AHEAD_BARS (7 bars) based on 30-timestep sequences of 23 features from historical and real-time data.
+This is an AI-powered stock trading system that uses deep learning to predict short-term price moves and automatically place trades through the Alpaca API. Built with PyTorch and highly optimized for NVIDIA GPUs, it combines technical analysis, market regime detection, and strict risk controls to make trading decisions.
 
-- Model Training: Trains the CNN-LSTM model per symbol using Adam optimizer (learning rate 0.001), BCEWithLogitsLoss, early stopping, and ReduceLROnPlateau scheduler (patience 5, factor 0.5) over customizable epochs with customizable batch size; supports data augmentation via noise addition; in backtest mode, enables an automated retraining cycle (up to X attempts) that retrains until performance criteria are met, then selects and copies the best attempt's models/scalers across all attempts.
+Whether you're running realistic backtests or live/paper trading, the bot handles everything from data fetching and model training to execution and notifications — all with graphs and performance reports.
 
-- **Backtesting:** Simulates trades across multiple symbols between a specifyable data, and today. Includes transaction costs, ATR-based stops/profits, min holding periods, performance metrics (Sharpe ratio, max drawdown, win rates, accuracies), Monte Carlo simulations (50,000 runs), buy-and-hold benchmarks. 
+### Key Features
 
-- **Live Trading:** Executes market orders during open market hours with email notifications for individual trades and daily summaries.
+- **Neural Network Prediction**: LSTM model with Multihead Attention that analyzes 30-timestep sequences of **31 features** (including RSI, MACD, ATR, ADX, volume profile, multi-timeframe indicators, and earnings/sentiment proxies) to forecast price direction over the next 21 bars (~5 hours at 15-minute intervals).
+- **Market Regime Detection**: Hidden Markov Model (HMM) that identifies 6 different market states (Calm Bull, Volatile Bull, etc.) to improve signal quality.
+- **Ensemble Power**: Combines LSTM predictions with XGBoost for more reliable buy/sell decisions.
+- **Pairs Trading**: Built-in market-neutral strategy using cointegrated pairs (AAPL-MSFT, NVDA-AMD, etc.) with spread and z-score logic.
+- **Strong Risk Management**: ATR-based stop-loss and take-profit, trailing stops, volatility filters, RSI/ADX thresholds, maximum drawdown protection, and minimum holding periods.
+- **Advanced Backtesting**: Automatically runs multiple training attempts, selects the absolute best models per symbol, and reports Sharpe ratio, max drawdown, win rate, accuracy, Monte Carlo simulations, and direct comparison to Buy-and-Hold stratiges.
+- **Live & Paper Trading**: Executes real market orders during market hours, includes real-time regime detection, and sends email alerts for every trade plus daily summaries.
+- **Performance Graphing**: Shows three lines — **Day Trading equity curve (blue)**, **Buy-and-Hold (green)**, and a dashed red **Initial Cash breakeven line** — so you instantly see when you're in profit and how alternative stratigies preform.
 
-- **Multi-Symbol Support:** Handles trading for multiple stocks (e.g., SPY, MSFT, AAPL, AMZN, NVDA, META, GOOGL) with parallel multiprocessing (4 workers) for model training and independent backtesting per symbol.
+## How It Works
 
-- **GPU Acceleration:** Leverages PyTorch with CUDA for accelerated training and inference on RTX 5080, including memory management via torch.cuda.empty_cache() after parallel sessions.
+The Alpaca Neural Bot follows a three-stage process: **training & backtesting** first, then **live trading**.
 
-- **Sentiment Analysis:** Has a framework to utilizes DistilBERT (distilbert-base-uncased-finetuned-sst-2-english) via Hugging Face Transformers for news sentiment
-t scoring, currently defaults to netural. (A simulated place holder)
+### 1. Training & Backtesting Phase
+1. **Data Collection** — Downloads years of 15-minute historical bars from the Alpaca API (with smart caching and retries).
+2. **Feature Engineering** — Calculates 31 technical indicators (RSI, MACD, ATR, ADX, Bollinger Bands, volume profile, multi-timeframe data, etc.) plus sentiment.
+3. **Model Training** — Trains an LSTM + Multihead Attention neural network on GPU for each symbol. Also builds a Hidden Markov Model (HMM) for market regime detection and an XGBoost ensemble.
+4. **Automated Optimization** — Runs up to 15 full training attempts, backtests each one, and automatically keeps the best-performing models per symbol.
+5. **Realistic Simulation** — Performs detailed backtesting with ATR-based stops, trailing stops, volatility filters, pairs trading, transaction costs, and 50,000 Monte Carlo simulations. Generates a clear equity curve graph comparing your strategy to Buy-and-Hold.
 
-- **Free Tier Compatible:** Optimized for Alpaca's free API tier with retry logic (3 attempts, 1-second delay), data caching (24-hour expiry), and rate-limit handling via tenacity.
+### 2. Live Trading Phase
+Once the best models are ready:
+1. Loads the trained models and scalers from disk.
+2. Every 15 minutes (while the market is open):
+   - Fetches the latest price data
+   - Updates all 31 indicators and detects the current market regime
+   - Runs the LSTM + XGBoost ensemble to generate a confidence-weighted prediction
+   - Applies strict risk filters (confidence threshold, RSI, ADX, volatility)
+   - Decides **Buy**, **Sell**, or **Hold**
+   - Executes market orders through Alpaca (paper or live)
+   - Sends real-time email alerts for every trade and daily summaries
+
+The system continuously monitors portfolio drawdown and enforces conservative position sizing and risk rules at all times.
+
+## The 31 Technical Features Used by the Model
+
+The neural network looks at **31 different features** every 15 minutes to decide whether the stock is likely to go up or down in the next ~5 hours. Here's what each one means and what it tells the model:
+
+### Basic Price & Volume (Raw Market Data)
+- **close** — Current closing price of the stock  
+- **high** — Highest price reached in the 15-minute bar  
+- **low** — Lowest price reached in the 15-minute bar  
+- **volume** — How many shares were traded in that bar (shows activity level)
+
+### Moving Averages & Trend
+- **MA20** — 20-period Simple Moving Average (short-term trend)  
+- **MA50** — 50-period Simple Moving Average (medium-term trend)  
+- **Trend** — Simple flag: 1 if price is above MA20 (uptrend), 0 otherwise
+
+### Momentum & Oscillators
+- **RSI** — Relative Strength Index (14-period) — shows if the stock is overbought (>70) or oversold (<30)  
+- **MACD** — Moving Average Convergence Divergence — measures momentum and trend changes  
+- **MACD_signal** — 9-period signal line of MACD (used for crossovers)  
+- **Stoch_K** — Fast Stochastic %K — shows where the current price is in the recent high/low range  
+- **Stoch_D** — Slow Stochastic %D — smoother version of Stoch_K for confirmation  
+- **ADX** — Average Directional Index — tells how strong the current trend is (higher = stronger trend)
+
+### Volatility & Risk Measures
+- **ATR** — Average True Range (14-period) — measures how much the stock typically moves per bar  
+- **Volatility** — 20-period standard deviation of returns — shows recent price swings  
+- **Close_ATR** — Price divided by ATR — shows how “expensive” the stock is relative to its normal movement  
+- **MA20_ATR** — MA20 divided by ATR — helps spot when the trend is stretched
+
+### Volume-Based Indicators
+- **OBV** — On-Balance Volume — tracks whether volume is pushing price up or down over time  
+- **VWAP** — Volume Weighted Average Price — average price weighted by volume (institutional benchmark)  
+- **CMF** — Chaikin Money Flow — shows if money is flowing into or out of the stock  
+- **Volume_Delta** — Volume × (close - open) — shows buying vs selling pressure in each bar  
+- **VWAP_Dev** — How far the current price is from VWAP — useful for mean-reversion signals
+
+### Advanced / Custom Features
+- **BB_upper** — Upper Bollinger Band (20-period, 2 std devs) — upper volatility boundary  
+- **BB_lower** — Lower Bollinger Band — lower volatility boundary  
+- **Return_1d** — 1-bar percentage return  
+- **Return_5d** — 5-bar percentage return (helps spot short-term momentum)  
+- **RSI_60** — 60-minute timeframe RSI (multi-timeframe view)  
+- **MA20_60** — 60-minute timeframe MA20 (longer-term context)  
+- **Macro_Stress** — Ratio of recent volatility vs longer-term volatility (detects regime changes)  
+- **Earnings_Proxy** — Sentiment × volume strength — combines news mood with trading activity  
+- **Sentiment** — News sentiment score from DistilBERT (currently neutral by default)
+
+These 31 features give the model a rich, multi-angle view of the market — price action, momentum, volatility, volume pressure, and even a hint of sentiment. This is why the bot can make smarter decisions than simple rule-based systems.
+
+### Current Status (March 2026)
+
+- Supports 8 major stocks + 4 pairs
+- Fully working live/paper trading with email alerts
+- Continuous daily equity tracking (no more flat blue line!)
+- Optimized for Alpaca’s free tier (caching, retries, rate-limit friendly)
+- Runs on consumer hardware with an RTX 50 and 40 series
+
+---
+
+**Note**: This is an educational and research project. Always backtest thoroughly, start with paper trading, and never risk money you can’t afford to lose.
+
+---
 
 ### Simulated BackTest Results from 1/1/2025 to 1/2/2026
 <img width="1200" height="600" alt="portfolio_value_graph" src="https://github.com/user-attachments/assets/eefabf08-5fd7-4401-93c8-a9cdc438d3fc" />
