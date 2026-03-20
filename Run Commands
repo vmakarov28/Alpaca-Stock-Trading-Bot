@@ -1,5 +1,5 @@
 #Replace "2_4" with appropriate version number
-
+Current allowed arguments "--force-train", "--DEBUG", "--backtest", "--reset", "" 
 python alpaca_neural_bot_v2_4.py #Live trading, use cached models
 python alpaca_neural_bot_v2_4.py --DEBUG #Live trading, use cached models but with debug mode true 
 python alpaca_neural_bot_v2_4.py --force-train #Live trading, retrain models
