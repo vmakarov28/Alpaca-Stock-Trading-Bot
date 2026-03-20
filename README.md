@@ -1,17 +1,17 @@
 # Alpaca Neural Bot v10.00.01
 
-**Alpaca Neural Bot** is a smart, AI-powered stock trading system that uses deep learning to predict short-term price moves and automatically place trades through the Alpaca API. Built with PyTorch and highly optimized for NVIDIA GPUs (especially the RTX 5080), it combines technical analysis, market regime detection, and strict risk controls to make trading decisions.
+This is an AI-powered stock trading system that uses deep learning to predict short-term price moves and automatically place trades through the Alpaca API. Built with PyTorch and highly optimized for NVIDIA GPUs, it combines technical analysis, market regime detection, and strict risk controls to make trading decisions.
 
-Whether you're running realistic backtests or live/paper trading, the bot handles everything from data fetching and model training to execution and notifications — all with clean graphs and detailed performance reports.
+Whether you're running realistic backtests or live/paper trading, the bot handles everything from data fetching and model training to execution and notifications — all with graphs and performance reports.
 
 ### Key Features
 
 - **Neural Network Prediction**: LSTM model with Multihead Attention that analyzes 30-timestep sequences of **32 features** (including RSI, MACD, ATR, ADX, volume profile, multi-timeframe indicators, and earnings/sentiment proxies) to forecast price direction over the next 21 bars (~5 hours at 15-minute intervals).
 - **Market Regime Detection**: Hidden Markov Model (HMM) that identifies 6 different market states (Calm Bull, Volatile Bull, etc.) to improve signal quality.
 - **Ensemble Power**: Combines LSTM predictions with XGBoost for more reliable buy/sell decisions.
-- **Pairs Trading (Stat Arb)**: Built-in market-neutral strategy using cointegrated pairs (AAPL-MSFT, NVDA-AMD, etc.) with spread and z-score logic.
+- **Pairs Trading**: Built-in market-neutral strategy using cointegrated pairs (AAPL-MSFT, NVDA-AMD, etc.) with spread and z-score logic.
 - **Strong Risk Management**: ATR-based stop-loss and take-profit, trailing stops, volatility filters, RSI/ADX thresholds, maximum drawdown protection, and minimum holding periods.
-- **Advanced Backtesting**: Automatically runs multiple training attempts (up to 15), selects the absolute best models per symbol, and reports Sharpe ratio, max drawdown, win rate, accuracy, Monte Carlo simulations (50,000 runs), and direct comparison to Buy-and-Hold.
+- **Advanced Backtesting**: Automatically runs multiple training attempts, selects the absolute best models per symbol, and reports Sharpe ratio, max drawdown, win rate, accuracy, Monte Carlo simulations, and direct comparison to Buy-and-Hold stratiges.
 - **Live & Paper Trading**: Executes real market orders during market hours, includes real-time regime detection, and sends email alerts for every trade plus daily summaries.
 - **Beautiful Performance Graphs**: Shows three lines — **Day Trading equity curve (blue)**, **Buy-and-Hold (green)**, and a dashed red **Initial Cash breakeven line** — so you instantly see when you're in profit.
 
