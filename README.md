@@ -1,8 +1,16 @@
-# Alpaca Neural Bot v10.00.01
+# Deep Trader <sup>10<sup>
 
-This is an AI-powered stock trading system that uses deep learning to predict short-term price moves and automatically place trades through the Alpaca API. Built with PyTorch and highly optimized for NVIDIA GPUs, it combines technical analysis, market regime detection, and strict risk controls to make trading decisions.
+This is v10.00.00 of the project formly known as Alpaca Neural Bot (v0-v9). DeepTrader is an AI-powered stock trading system that uses deep learning to predict short-term price moves and automatically place trades through the Alpaca API. Built with PyTorch and highly optimized for NVIDIA GPUs, it combines technical analysis, market regime detection, and strict risk controls to make trading decisions.
 
 Whether you're running realistic backtests or live/paper trading, the bot handles everything from data fetching and model training to execution and notifications — all with graphs and performance reports.
+
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.0-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)](https://pytorch.org/)
+[![Alpaca API](https://img.shields.io/badge/Alpaca%20API-Excecution-00BFFF?style=flat&logo=alpaca&logoColor=white)](https://alpaca.markets/)
+[![CUDA](https://img.shields.io/badge/CUDA-11.8-76B900?style=flat-square&logo=nvidia&logoColor=white)](https://developer.nvidia.com/cuda-toolkit)
+[![TA-Lib](https://img.shields.io/badge/TA--Lib-Indicators-FF6F00?style=flat-square&logo=python&logoColor=white)](https://ta-lib.org/)
+
+---
 
 ### Key Features
 
@@ -15,16 +23,18 @@ Whether you're running realistic backtests or live/paper trading, the bot handle
 - **Live & Paper Trading**: Executes real market orders during market hours, includes real-time regime detection, and sends email alerts for every trade plus daily summaries.
 - **Performance Graphing**: Shows three lines — **Day Trading equity curve (blue)**, **Buy-and-Hold (green)**, and a dashed red **Initial Cash breakeven line** — so you instantly see when you're in profit and how alternative stratigies preform.
 
-## How It Works
+---
+
+### How It Works
 
 The Alpaca Neural Bot follows a three-stage process: **training & backtesting** first, then **live trading**.
 
 ### 1. Training & Backtesting Phase
 1. **Data Collection** — Downloads years of 15-minute historical bars from the Alpaca API (with smart caching and retries).
 2. **Feature Engineering** — Calculates 31 technical indicators (RSI, MACD, ATR, ADX, Bollinger Bands, volume profile, multi-timeframe data, etc.) plus sentiment.
-3. **Model Training** — Trains an LSTM + Multihead Attention neural network on GPU for each symbol. Also builds a Hidden Markov Model (HMM) for market regime detection and an XGBoost ensemble.
-4. **Automated Optimization** — Runs up to 15 full training attempts, backtests each one, and automatically keeps the best-performing models per symbol.
-5. **Realistic Simulation** — Performs detailed backtesting with ATR-based stops, trailing stops, volatility filters, pairs trading, transaction costs, and 50,000 Monte Carlo simulations. Generates a clear equity curve graph comparing your strategy to Buy-and-Hold.
+3. **Model Training** — Trains an LSTM + Multihead Attention neural network on GPU for each symbol. Also builds a Hidden Markov Model (HMM) for market regime detection and an XGBoost ensemble on CPU for voting style decision making.
+4. **Automated Optimization** — Runs repeated full training attempts, backtests each one, and automatically keeps the best-performing models per symbol.
+5. **Realistic Simulation** — Performs detailed backtesting with ATR-based stops, trailing stops, volatility filters, pairs trading, transaction costs, and Monte Carlo simulations. Generates a clear graph comparing Day Trading to Buy-and-Hold.
 
 ### 2. Live Trading Phase
 Once the best models are ready:
@@ -35,59 +45,10 @@ Once the best models are ready:
    - Runs the LSTM + XGBoost ensemble to generate a confidence-weighted prediction
    - Applies strict risk filters (confidence threshold, RSI, ADX, volatility)
    - Decides **Buy**, **Sell**, or **Hold**
-   - Executes market orders through Alpaca (paper or live)
+   - Executes market orders through Alpaca
    - Sends real-time email alerts for every trade and daily summaries
 
 The system continuously monitors portfolio drawdown and enforces conservative position sizing and risk rules at all times.
-
-## The 31 Technical Features Used by the Model
-
-The neural network looks at **31 different features** every 15 minutes to decide whether the stock is likely to go up or down in the next ~5 hours. Here's what each one means and what it tells the model:
-
-### Basic Price & Volume (Raw Market Data)
-- **close** — Current closing price of the stock  
-- **high** — Highest price reached in the 15-minute bar  
-- **low** — Lowest price reached in the 15-minute bar  
-- **volume** — How many shares were traded in that bar (shows activity level)
-
-### Moving Averages & Trend
-- **MA20** — 20-period Simple Moving Average (short-term trend)  
-- **MA50** — 50-period Simple Moving Average (medium-term trend)  
-- **Trend** — Simple flag: 1 if price is above MA20 (uptrend), 0 otherwise
-
-### Momentum & Oscillators
-- **RSI** — Relative Strength Index (14-period) — shows if the stock is overbought (>70) or oversold (<30)  
-- **MACD** — Moving Average Convergence Divergence — measures momentum and trend changes  
-- **MACD_signal** — 9-period signal line of MACD (used for crossovers)  
-- **Stoch_K** — Fast Stochastic %K — shows where the current price is in the recent high/low range  
-- **Stoch_D** — Slow Stochastic %D — smoother version of Stoch_K for confirmation  
-- **ADX** — Average Directional Index — tells how strong the current trend is (higher = stronger trend)
-
-### Volatility & Risk Measures
-- **ATR** — Average True Range (14-period) — measures how much the stock typically moves per bar  
-- **Volatility** — 20-period standard deviation of returns — shows recent price swings  
-- **Close_ATR** — Price divided by ATR — shows how “expensive” the stock is relative to its normal movement  
-- **MA20_ATR** — MA20 divided by ATR — helps spot when the trend is stretched
-
-### Volume-Based Indicators
-- **OBV** — On-Balance Volume — tracks whether volume is pushing price up or down over time  
-- **VWAP** — Volume Weighted Average Price — average price weighted by volume (institutional benchmark)  
-- **CMF** — Chaikin Money Flow — shows if money is flowing into or out of the stock  
-- **Volume_Delta** — Volume × (close - open) — shows buying vs selling pressure in each bar  
-- **VWAP_Dev** — How far the current price is from VWAP — useful for mean-reversion signals
-
-### Advanced / Custom Features
-- **BB_upper** — Upper Bollinger Band (20-period, 2 std devs) — upper volatility boundary  
-- **BB_lower** — Lower Bollinger Band — lower volatility boundary  
-- **Return_1d** — 1-bar percentage return  
-- **Return_5d** — 5-bar percentage return (helps spot short-term momentum)  
-- **RSI_60** — 60-minute timeframe RSI (multi-timeframe view)  
-- **MA20_60** — 60-minute timeframe MA20 (longer-term context)  
-- **Macro_Stress** — Ratio of recent volatility vs longer-term volatility (detects regime changes)  
-- **Earnings_Proxy** — Sentiment × volume strength — combines news mood with trading activity  
-- **Sentiment** — News sentiment score from DistilBERT (currently neutral by default)
-
-These 31 features give the model a rich, multi-angle view of the market — price action, momentum, volatility, volume pressure, and even a hint of sentiment. This is why the bot can make smarter decisions than simple rule-based systems.
 
 ### Current Status (March 2026)
 
@@ -103,18 +64,24 @@ These 31 features give the model a rich, multi-angle view of the market — pric
 
 ---
 
+### Simulated BackTest Results from 1/1/2025 to 3/19/2026
+<img width="1200" height="600" alt="After Changes" src="https://github.com/user-attachments/assets/c16be814-5ef5-4a6a-92a6-44d8bacb93ae" />
+Simulated BackTest Results from 1/1/2025 to 3/13/2026
 
-### Long Duration Paper Trading Results (Last Updated 2/7/26)
-Starting Value: $100,000
+### Real Life Long Duration Paper Trading Results (Last Updated 2/7/26)
+<img width="979" height="251" alt="image" src="https://github.com/user-attachments/assets/13649f49-4902-47fe-8887-311688e55c17" />
 
-Days Running: 118
-
-Current Portfolio Value: $128,613.36
-
-Lowest Recorded Portfolio Value: $97,185.30
+- Starting Value: $100,000
+  
+- Active Days Running: 122
+  
+- Current Portfolio Value: $128,613.36
+  
+- Lowest Recorded Portfolio Value: $97,185.30 
 
 Disclaimer: ***It is HIGHLY recommened to use this for educational purposes only. Use paper trading to avoid real financial risk.***
 
+---
 
 # Installation Steps
 Follow these steps in order to set up the environment. 
@@ -124,7 +91,7 @@ Follow these steps in order to set up the environment.
 ## Prerequisites
 
 - Drivers: Install the latest nvidia drivers from nvdia app for your GPU.
-- Hardware: NVIDIA GPU with at least 16GB VRAM for efficient training. (Confirmed to work properly on RTX 5080 but other 50 series and 40 series card are likely to work).
+- Hardware: NVIDIA GPU with at least 16GB VRAM for efficient training. (Confirmed to work properly on RTX 5080 but other 50 series and 40 series cards are likely to work).
 - Operating System: Windows Subsystem for Linux (WSL2) on Windows 11 or Native Ubuntu 22.04+
 - Alpaca Account: Free account with paper trading enabled. Get API keys from Alpaca Dashboard.
 - Gmail Account: For email notifications (enable "Less secure app access" or use app password).
@@ -411,6 +378,6 @@ GNU Lesser General Public License v2.1. See LICENSE for details.
 
 Author: Vladimir Makarov
 
-Most recent change: 2/07/2026
+Most recent change: 3/20/2026
 
 GitHub: vmakarov28/Alpaca-Stock-Trading-Bot
