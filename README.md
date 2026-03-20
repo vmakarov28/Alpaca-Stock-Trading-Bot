@@ -4,9 +4,12 @@ This is v10.00.00 of the project formly known as Alpaca Neural Bot (v0-v9). Deep
 
 Whether you're running realistic backtests or live/paper trading, the bot handles everything from data fetching and model training to execution and notifications — all with graphs and performance reports.
 
-<image-card alt="Python" src="https://img.shields.io/badge/Python-3.10-blue" ></image-card>
-<image-card alt="PyTorch" src="https://img.shields.io/badge/PyTorch-2.0-orange" ></image-card>
-<image-card alt="Stars" src="https://img.shields.io/github/stars/vmakarov28/Alpaca-Stock-Trading-Bot?style=social" ></image-card>
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-ee4c2c?style=flat-square&logo=pytorch&logoColor=white)](https://pytorch.org/)
+![GitHub stars](https://img.shields.io/github/stars/vmakarov28/Alpaca-Stock-Trading-Bot?style=social)
+![GitHub forks](https://img.shields.io/github/forks/vmakarov28/Alpaca-Stock-Trading-Bot?style=social)
+![GitHub repo size](https://img.shields.io/github/repo-size/vmakarov28/Alpaca-Stock-Trading-Bot?style=flat-square)
+![License](https://img.shields.io/github/license/vmakarov28/Alpaca-Stock-Trading-Bot?style=flat-square)
 
 ### Key Features
 
