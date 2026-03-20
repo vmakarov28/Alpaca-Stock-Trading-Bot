@@ -23,6 +23,8 @@ Whether you're running realistic backtests or live/paper trading, the bot handle
 - **Live & Paper Trading**: Executes real market orders during market hours, includes real-time regime detection, and sends email alerts for every trade plus daily summaries.
 - **Performance Graphing**: Shows three lines — **Day Trading equity curve (blue)**, **Buy-and-Hold (green)**, and a dashed red **Initial Cash breakeven line** — so you instantly see when you're in profit and how alternative stratigies preform.
 
+---
+
 ## How It Works
 
 The Alpaca Neural Bot follows a three-stage process: **training & backtesting** first, then **live trading**.
