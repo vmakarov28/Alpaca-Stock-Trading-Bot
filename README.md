@@ -2,7 +2,7 @@
 
 This is v10.00.00 of the project formly known as Alpaca Neural Bot (v0-v9). DeepTrader is an AI-powered stock trading system that uses deep learning to predict short-term price moves and automatically place trades through the Alpaca API. Built with PyTorch and highly optimized for NVIDIA GPUs, it combines technical analysis, market regime detection, and strict risk controls to make trading decisions.
 
-Whether you're running realistic backtests or live/paper trading, the bot handles everything from data fetching and model training to execution and notifications — all with graphs and performance reports.
+This project handles everything from data fetching and model training to testing, execution and notifications.
 
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)](https://pytorch.org/)
