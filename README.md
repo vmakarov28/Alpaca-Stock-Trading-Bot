@@ -6,7 +6,7 @@ This project handles everything from data fetching and model training to testing
 
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.0-%23812CE5?style=for-the-badge&logo=pytorch&logoColor=white)](https://pytorch.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.0-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![Alpaca API](https://img.shields.io/badge/Alpaca%20API-Excecution-00BFFF?style=flat&logo=alpaca&logoColor=white)](https://alpaca.markets/)
 [![CUDA](https://img.shields.io/badge/CUDA-11.8-76B900?style=flat-square&logo=nvidia&logoColor=white)](https://developer.nvidia.com/cuda-toolkit)
 [![TA-Lib](https://img.shields.io/badge/TA--Lib-Indicators-FF6F00?style=flat-square&logo=python&logoColor=white)](https://ta-lib.org/)
