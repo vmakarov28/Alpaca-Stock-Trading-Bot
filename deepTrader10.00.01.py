@@ -4,7 +4,7 @@
 # | Author: Vladimir Makarov                                                     |
 # | Project Start Date: May 9, 2025                                              |
 # | License: GNU Lesser General Public License v2.1                              |
-# | Version: 10.00.00 (Public Release)                                           |
+# | Version: 10.00.01 (Un-Released)                                              |
 # +------------------------------------------------------------------------------+
 # Note: Go to line 73 for the main CONFIG dictionary
 
@@ -93,7 +93,7 @@ CONFIG = {
     'CACHE_DIR': './cache',  # Directory for caching data
     'MODEL_CACHE_DIR': '/mnt/c/Users/aipla/Desktop/Model Weights',  # Directory for saving model weights, scalers, and sentiment
     'CACHE_EXPIRY_SECONDS': 24 * 60 * 60,  # Expiry time for cached data in seconds
-    'LIVE_DATA_BARS': 500,  # Number of bars to fetch for live data
+    'LIVE_DATA_BARS': 1200,  # Number of bars to fetch for live data
 
     # Model Training - Settings for training the machine learning model
     'TRAIN_EPOCHS': 50,  # Number of epochs for training the model
@@ -112,13 +112,13 @@ CONFIG = {
     'NUM_REGIMES': 6,  # Number of hidden market regimes (Calm Bull, Volatile Bull, Calm Bear, Volatile Bear)
 
     # API and Authentication - Credentials for API access
-    'ALPACA_API_KEY': 'REPLACE',  # API key for Alpaca
-    'ALPACA_SECRET_KEY': 'REPLACE',  # Secret key for Alpaca
+    'ALPACA_API_KEY': 'PKXROHOFWDFC7OFFXQCBRDWVMU',  # API key for Alpaca
+    'ALPACA_SECRET_KEY': 'CT25NcFuH7UtkPtut4QVLfBzk8j1juDevVnNpXgLpwgC',  # Secret key for Alpaca
 
     # Email Notifications - Configuration for sending email alerts
-    'EMAIL_SENDER': 'REPLACE@gmail.com',  # Email address for sending notifications
-    'EMAIL_PASSWORD': 'REPLACE',  # Password for the email account
-    'EMAIL_RECEIVER': ['REPLACE@gmail.com'],  # List of email recipients
+    'EMAIL_SENDER': 'alpaca.ai.tradingbot@gmail.com',  # Email address for sending notifications
+    'EMAIL_PASSWORD': 'hjdf sstp pyne rotq',  # Password for the email account
+    'EMAIL_RECEIVER': ['aiplane.scientist@gmail.com', 'vmakarov28@students.d125.org', 'tchaikovskiy@hotmail.com'],  # List of email recipients
     'SMTP_SERVER': 'smtp.gmail.com',  # SMTP server for email
     'SMTP_PORT': 587,  # Port for SMTP server
 
@@ -166,7 +166,7 @@ CONFIG = {
 
     # Account Management
     'RESET_ACCOUNT_ON_START': True,   # Set to True only when you want a full reset (closes all positions & cancels orders)
-    'PAPER_TRADING': False,             # Set to False when going live with real money
+    'PAPER_TRADING': True,             # Set to False when going live with real money
     'DESIRED_STARTING_CASH': 100000.00,  # Desired cash for reset
 
     # Pairs-specific params
@@ -179,7 +179,7 @@ CONFIG = {
 
 
 #pyenv activate pytorch_env
-#python /mnt/c/Users/aipla/Downloads/deepTrader10.00.00.py --backtest --force-train --DEBUG
+#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v10.00.01.py --backtest --force-train --DEBUG
 
 
 
@@ -568,11 +568,12 @@ def cleanup_account_on_start() -> None:
 
 
 # Fetches last N bars from Alpaca for live, uses recent dates, renames vwap, sorts, retries on error.
-def fetch_recent_data(symbol: str, num_bars: int) -> pd.DataFrame:
-    """Fetch recent bars for live trading."""
+def fetch_recent_data(symbol: str, num_bars: int = 1000) -> pd.DataFrame:
+    """Improved live data fetch with more history and debug."""
     client = StockHistoricalDataClient(CONFIG['ALPACA_API_KEY'], CONFIG['ALPACA_SECRET_KEY'])
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=3)
+    end_date = datetime.now(timezone.utc)
+    start_date = end_date - timedelta(days=10)  # Increased from 3 days
+
     request = StockBarsRequest(
         symbol_or_symbols=symbol,
         timeframe=CONFIG['TIMEFRAME'],
@@ -584,7 +585,7 @@ def fetch_recent_data(symbol: str, num_bars: int) -> pd.DataFrame:
     if bars.empty:
         raise ValueError(f"No recent data for {symbol}")
     df = bars.reset_index().rename(columns={'vwap': 'VWAP'})
-    logger.info(f"Fetched {len(df)} recent bars for {symbol}")
+    print(f"{Fore.CYAN}[LIVE FETCH] {symbol}: {len(df)} bars | Last price: ${df['close'].iloc[-1]:.2f}{Style.RESET_ALL}")
     return df.sort_values('timestamp')
 
 # Fetches historical bars in 1yr chunks to avoid limits, handles META/FB rename, concats/dedups, raises on low data.
@@ -1849,7 +1850,7 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
                             'BB_lower', 'Stoch_K', 'Stoch_D', 'ADX', 'Sentiment'
                         ]
                         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-                        if len(df) < CONFIG['TIMESTEPS'] + 1:
+                        if len(df) < 20:   # More tolerant for live data
                             logger.warning(f"Insufficient data for {symbol} live prediction: {len(df)} bars")
                             prediction = 0.5
                             regime = "Unknown (insufficient data)"
