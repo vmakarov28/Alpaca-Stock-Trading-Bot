@@ -4,7 +4,7 @@
 # | Author: Vladimir Makarov                                                     |
 # | Project Start Date: May 9, 2025                                              |
 # | License: GNU Lesser General Public License v2.1                              |
-# | Version: 10.00.04 (Un-Released)                                              |
+# | Version: 10.00.05 (Un-Released)                                              |
 # +------------------------------------------------------------------------------+
 # Note: Go to line 73 for the main CONFIG dictionary
 
@@ -1942,7 +1942,18 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
                         current_volatility = float(df['Volatility'].iloc[-1])
                         atr_val = float(df['ATR'].iloc[-1])
 
-                        regime = "Unknown"   # TODO: add HMM regime here later if desired
+                        regime = "Unknown"
+                        hmm_model = hmms.get(symbol)
+                        if hmm_model is not None:
+                            try:
+                                regime_names = ["Calm Bull", "Moderate Bull", "Volatile Bull",
+                                                "Calm Bear", "Moderate Bear", "Volatile Bear"]
+                                hmm_input = recent_seq.reshape(-1, recent_seq.shape[2])
+                                regime_idx = hmm_model.predict(hmm_input)[0]
+                                regime = regime_names[regime_idx % len(regime_names)]
+                            except Exception as e:
+                                logger.warning(f"HMM regime prediction failed for {symbol}: {e}")
+                                regime = "Unknown"
 
                         logger.info(f"LIVE → {symbol} | Pred={prediction:.3f} | Price=${price:.2f} | "
                                    f"RSI={current_rsi:.1f} | ADX={current_adx:.1f} | Vol={current_volatility:.2f} | ATR=${atr_val:.2f}")
