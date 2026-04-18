@@ -4,7 +4,7 @@
 # | Author: Vladimir Makarov                                                     |
 # | Project Start Date: May 9, 2025                                              |
 # | License: GNU Lesser General Public License v2.1                              |
-# | Version: 10.00.01 (Un-Released)                                              |
+# | Version: 10.00.04 (Un-Released)                                              |
 # +------------------------------------------------------------------------------+
 # Note: Go to line 73 for the main CONFIG dictionary
 
@@ -179,7 +179,7 @@ CONFIG = {
 
 
 #pyenv activate pytorch_env
-#python /mnt/c/Users/aipla/Downloads/alpaca_neural_bot_v10.00.01.py --backtest --force-train --DEBUG
+#python /mnt/c/Users/aipla/Downloads/deepTrader10.00.03.py --backtest --force-train --DEBUG
 
 
 
@@ -252,7 +252,7 @@ def get_sentiment_score(symbol: str) -> float:
         
         logger.info(f"REAL sentiment for {symbol}: {score:.3f} from {len(news_items)} articles")
     except Exception as e:
-        logger.DEBUG(f"News API failed for {symbol}: {e} → using 0.0 neutral sentiment")
+        logger.debug(f"News API failed for {symbol}: {e} → using 0.0 neutral sentiment")
         score = 0.0
 
     with open(cache_path, 'wb') as f:
@@ -421,10 +421,9 @@ def create_cache_directory() -> None:
     wait=wait_fixed(CONFIG['API_RETRY_DELAY'] / 1000),
     retry=retry_if_exception_type(Exception)
 )
-
-def cleanup_account_on_start() -> None:
+def cleanup_account_on_start(force_reset: bool = False) -> None:
     # Do nothing unless you explicitly ask for a reset
-    if not (args.reset or CONFIG.get('RESET_ACCOUNT_ON_START', False)):
+    if not (force_reset or CONFIG.get('RESET_ACCOUNT_ON_START', False)):
         return
 
     # Settings
@@ -561,32 +560,73 @@ def cleanup_account_on_start() -> None:
 #     """Retry wrapper for getting all positions."""
 #     return trading_client.get_all_positions()
 
-# @retry(stop=stop_after_attempt(CONFIG['API_RETRY_ATTEMPTS']), wait=wait_fixed(CONFIG['API_RETRY_DELAY'] / 1000), retry=retry_if_exception_type(APIError))
-# def get_clock_with_retry():
-#     """Retry wrapper for getting market clock."""
-#     return trading_client.get_clock()
-
-
-# Fetches last N bars from Alpaca for live, uses recent dates, renames vwap, sorts, retries on error.
-def fetch_recent_data(symbol: str, num_bars: int = 1000) -> pd.DataFrame:
-    """Improved live data fetch with more history and debug."""
+@retry(
+    retry=retry_if_exception_type(Exception),
+    stop=stop_after_attempt(6),
+    wait=wait_fixed(2)
+)
+def fetch_recent_data(symbol: str, num_bars: int = CONFIG['LIVE_DATA_BARS']) -> pd.DataFrame:
+    """Robust live fetch focused on RECENT data only.
+    Never falls back to very old data (max 7 days).
+    Returns whatever we can get — never raises in live mode."""
+    
     client = StockHistoricalDataClient(CONFIG['ALPACA_API_KEY'], CONFIG['ALPACA_SECRET_KEY'])
     end_date = datetime.now(timezone.utc)
-    start_date = end_date - timedelta(days=10)  # Increased from 3 days
+    required_bars = CONFIG['TIMESTEPS'] + 20   # relaxed for live trading
 
-    request = StockBarsRequest(
-        symbol_or_symbols=symbol,
-        timeframe=CONFIG['TIMEFRAME'],
-        start=start_date,
-        end=end_date,
-        limit=num_bars
-    )
-    bars = client.get_stock_bars(request).df
-    if bars.empty:
-        raise ValueError(f"No recent data for {symbol}")
-    df = bars.reset_index().rename(columns={'vwap': 'VWAP'})
-    print(f"{Fore.CYAN}[LIVE FETCH] {symbol}: {len(df)} bars | Last price: ${df['close'].iloc[-1]:.2f}{Style.RESET_ALL}")
-    return df.sort_values('timestamp')
+    logger.info(f"[LIVE FETCH] {symbol} - requesting minimum {required_bars} recent bars")
+
+    # Try increasingly larger but still recent windows (max 7 days)
+    for days_back in [1, 2, 3, 5, 7]:
+        start_date = end_date - timedelta(days=days_back)
+        
+        try:
+            request = StockBarsRequest(
+                symbol_or_symbols=symbol,
+                timeframe=CONFIG['TIMEFRAME'],
+                start=start_date,
+                end=end_date,
+                limit=num_bars * 4
+            )
+            
+            bars_response = client.get_stock_bars(request)
+            bars = bars_response.df
+
+            # Handle MultiIndex
+            if isinstance(bars.index, pd.MultiIndex):
+                if symbol in bars.index.get_level_values(0):
+                    bars = bars.xs(symbol, level=0)
+                else:
+                    continue
+
+            if bars.empty:
+                logger.warning(f"No bars returned for {symbol} in last {days_back} days")
+                continue
+
+            df = bars.rename(columns={'vwap': 'VWAP'}).sort_index()
+
+            if len(df) >= required_bars:
+                last_price = float(df['close'].iloc[-1])
+                logger.info(f"[LIVE FETCH SUCCESS] {symbol}: {len(df)} bars | Last price: ${last_price:.2f} (from {days_back}d window)")
+                print(f"{Fore.GREEN}[LIVE SUCCESS] {symbol}: {len(df)} bars | Last: ${last_price:.2f}{Style.RESET_ALL}")
+                return df
+
+            logger.info(f"[LIVE] {symbol}: only {len(df)} bars from {days_back}d window — trying larger recent window")
+
+        except Exception as inner_e:
+            logger.warning(f"Live fetch failed for {symbol} ({days_back}d window): {inner_e}")
+            continue
+
+    # If we reach here we still have some data — return what we got (never raise)
+    if 'df' in locals() and not df.empty:
+        last_price = float(df['close'].iloc[-1])
+        logger.warning(f"[LIVE FETCH PARTIAL] {symbol}: only {len(df)} bars available — using latest data")
+        print(f"{Fore.YELLOW}[LIVE PARTIAL] {symbol}: {len(df)} bars | Last: ${last_price:.2f}{Style.RESET_ALL}")
+        return df
+
+    # Absolute last resort: empty df (will be caught gracefully in the loop)
+    logger.error(f"[LIVE FETCH FAILED] {symbol} - no recent bars after trying up to 7 days")
+    return pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume', 'vwap'])
 
 # Fetches historical bars in 1yr chunks to avoid limits, handles META/FB rename, concats/dedups, raises on low data.
 def fetch_data(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
@@ -675,20 +715,21 @@ def load_news_sentiment(symbol: str) -> Tuple[float, bool]:
 
 # Computes TA indicators on copy df, adds sentiment/trend, drops NaNs in indicators.
 def calculate_indicators(df: pd.DataFrame, sentiment: float) -> pd.DataFrame:
+    """Fixed version for both training AND live data (much more tolerant of short history)."""
     df = df.copy()
     required_cols = ['open', 'high', 'low', 'close', 'volume']
     if not all(col in df.columns for col in required_cols):
         raise ValueError(f"Missing required columns: {required_cols}")
-    
-    # FORCE DatetimeIndex (critical for multiprocessing workers)
+
+    # Force proper datetime index
     if not isinstance(df.index, pd.DatetimeIndex):
         df.index = pd.to_datetime(df.index)
     df = df.sort_index()
-    
+
     if 'VWAP' not in df.columns:
         df['VWAP'] = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum()
-    
-    # Basic indicators
+
+    # Basic indicators (use min_periods to reduce early NaNs)
     df['MA20'] = talib.SMA(df['close'], timeperiod=20)
     df['MA50'] = talib.SMA(df['close'], timeperiod=50)
     df['RSI'] = talib.RSI(df['close'], timeperiod=14)
@@ -708,38 +749,27 @@ def calculate_indicators(df: pd.DataFrame, sentiment: float) -> pd.DataFrame:
         df['high'], df['low'], df['close'], fastk_period=14, slowk_period=3, slowd_period=3
     )
     df['ADX'] = talib.ADX(df['high'], df['low'], df['close'], timeperiod=14)
+
     df['Sentiment'] = sentiment
     df['Trend'] = np.where(df['close'] > df['MA20'], 1, 0)
 
-    # Better Features
-    # 1. Multi-timeframe (60-minute) - fixed deprecated '60T'
+    # Multi-timeframe (60-min)
     df_60 = df.resample('60min').agg({
-        'open': 'first',
-        'high': 'max',
-        'low': 'min',
-        'close': 'last',
-        'volume': 'sum'
+        'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'
     }).dropna()
     df['RSI_60'] = talib.RSI(df_60['close'], timeperiod=14).reindex(df.index, method='ffill')
     df['MA20_60'] = talib.SMA(df_60['close'], timeperiod=20).reindex(df.index, method='ffill')
 
-    # 2. Volume Profile
+    # Additional features
     df['VWAP_Dev'] = df['close'] - df['VWAP']
     df['Volume_Delta'] = df['volume'] * (df['close'] - df['open'])
+    df['Macro_Stress'] = df['Volatility'].rolling(20).mean() / df['Volatility'].rolling(100, min_periods=20).mean()
+    df['Earnings_Proxy'] = df['Sentiment'] * (1 + df['Volume_Delta'].abs() / df['volume'].rolling(20, min_periods=5).mean())
 
-    # 3. Macro proxy
-    df['Macro_Stress'] = df['Volatility'].rolling(20).mean() / df['Volatility'].rolling(100).mean()
+    # === CRITICAL FIX FOR LIVE DATA ===
+    # Fill NaNs instead of dropping everything
+    df = df.ffill().bfill().fillna(0)
 
-    # 4. Earnings proxy
-    df['Earnings_Proxy'] = df['Sentiment'] * (1 + df['Volume_Delta'].abs() / df['volume'].rolling(20).mean())
-
-    indicator_cols = [
-        'MA20', 'MA50', 'RSI', 'MACD', 'MACD_signal', 'OBV', 'VWAP', 'ATR',
-        'CMF', 'Close_ATR', 'MA20_ATR', 'Return_1d', 'Return_5d', 'Volatility',
-        'BB_upper', 'BB_middle', 'BB_lower', 'Stoch_K', 'Stoch_D', 'ADX', 'Sentiment', 'Trend',
-        'RSI_60', 'MA20_60', 'VWAP_Dev', 'Volume_Delta', 'Macro_Stress', 'Earnings_Proxy'
-    ]
-    df = df.dropna(subset=indicator_cols)
     return df
 
 def validate_raw_data(df: pd.DataFrame, symbol: str) -> None:
@@ -1694,14 +1724,21 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
     check_dependencies()
     validate_config(CONFIG)
     create_cache_directory()
-    trading_client = TradingClient(CONFIG['ALPACA_API_KEY'], CONFIG['ALPACA_SECRET_KEY'], paper=True)
-    expected_features = 31
+    trading_client = TradingClient(CONFIG['ALPACA_API_KEY'], CONFIG['ALPACA_SECRET_KEY'], paper=CONFIG['PAPER_TRADING'])
+    expected_features = len([
+        'close', 'high', 'low', 'volume', 'MA20', 'MA50', 'RSI',
+        'MACD', 'MACD_signal', 'OBV', 'VWAP', 'ATR', 'CMF', 'Close_ATR',
+        'MA20_ATR', 'Return_1d', 'Return_5d', 'Volatility', 'BB_upper',
+        'BB_lower', 'Stoch_K', 'Stoch_D', 'ADX', 'Sentiment', 'Trend',
+        'RSI_60', 'MA20_60', 'VWAP_Dev', 'Volume_Delta', 'Macro_Stress', 'Earnings_Proxy'
+    ])
     models = {}
     scalers = {}
     dfs = {}
     stock_info = []
     total_epochs = len(CONFIG['SYMBOLS']) * CONFIG['TRAIN_EPOCHS']
     training_sentiments = {}
+    sentiments = {}  # ADD THIS LINE
     hmms = {}  # NEW: for live use
     need_training = False
     for symbol in CONFIG['SYMBOLS']:
@@ -1789,20 +1826,25 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
         portfolio_value = CONFIG['INITIAL_CASH']
         peak_value = portfolio_value
 
+        portfolio_value = CONFIG['INITIAL_CASH']
+        peak_value = portfolio_value
+
         while True:  # Infinite loop for continuous live trading
             @retry(stop=stop_after_attempt(CONFIG['API_RETRY_ATTEMPTS']), wait=wait_fixed(CONFIG['API_RETRY_DELAY'] / 1000), retry=retry_if_exception_type(APIError))
             def get_clock_with_retry():
-                return trading_client.get_clock()  # Retry wrapper for API calls to handle transient failures
+                return trading_client.get_clock()
+
             try:
                 clock = get_clock_with_retry()
             except APIError as e:
                 logger.error(f"Failed to get clock after retries: {str(e)}")
                 send_email("API Error", f"Failed to get clock: {str(e)}")
-                time.sleep(60) # Wait 1 min before next loop iteration to avoid spamming
+                time.sleep(60)
                 continue
-            if clock.is_open:  # Only trade when market is open
-                now = datetime.now(timezone.utc)  # Current time for scheduling (ensure timezone-aware for calculations)
-                next_mark = now.replace(second=0, microsecond=0)  # Align to next 15-min mark for bar intervals
+
+            if clock.is_open:
+                now = datetime.now(timezone.utc)
+                next_mark = now.replace(second=0, microsecond=0)
                 minutes = now.minute
                 if minutes % 15 != 0:
                     next_mark += timedelta(minutes=(15 - minutes % 15))
@@ -1810,133 +1852,170 @@ def main(backtest_only: bool = False, force_train: bool = False, debug: bool = F
                     next_mark += timedelta(minutes=15)
                 seconds_to_sleep = (next_mark - now).total_seconds()
                 if seconds_to_sleep > 0:
-                    time.sleep(seconds_to_sleep)  # Sleep to sync with timeframe (e.g., 15-min bars)
-            
+                    time.sleep(seconds_to_sleep)
+
                 @retry(stop=stop_after_attempt(CONFIG['API_RETRY_ATTEMPTS']), wait=wait_fixed(CONFIG['API_RETRY_DELAY'] / 1000), retry=retry_if_exception_type(APIError))
                 def get_account_with_retry():
                     return trading_client.get_account()
                 try:
                     account = get_account_with_retry()
                     cash = float(account.cash)
-                    portfolio_value = float(account.equity)  # Fetch current account state
+                    portfolio_value = float(account.equity)
                 except APIError as e:
                     logger.error(f"Failed to get account after retries: {str(e)}")
                     send_email("API Error", f"Failed to get account: {str(e)}")
-                    time.sleep(60) # Wait 1 min before next loop iteration
+                    time.sleep(60)
                     continue
-                peak_value = max(peak_value, portfolio_value)  # Track peak for drawdown calculation
+
+                peak_value = max(peak_value, portfolio_value)
                 drawdown = (peak_value - portfolio_value) / peak_value
                 if drawdown > CONFIG['MAX_DRAWDOWN_LIMIT']:
                     logger.warning(f"Portfolio drawdown exceeded {CONFIG['MAX_DRAWDOWN_LIMIT'] * 100}%. Pausing trading.")
                     send_email("Portfolio Drawdown Alert", f"Portfolio drawdown exceeded {CONFIG['MAX_DRAWDOWN_LIMIT'] * 100}%. Trading paused.")
-                    break  # Halt trading on excessive drawdown to protect capital
-            
-                # Retry wrappers defined here inside main() so trading_client is in scope
+                    break
+
                 @retry(stop=stop_after_attempt(CONFIG['API_RETRY_ATTEMPTS']), wait=wait_fixed(CONFIG['API_RETRY_DELAY'] / 1000), retry=retry_if_exception_type(APIError))
                 def get_all_positions_with_retry():
                     return trading_client.get_all_positions()
 
-                decisions = []  # Collect decisions for summary email
+                decisions = []
                 open_positions = get_all_positions_with_retry()
+
                 for symbol in CONFIG['SYMBOLS']:
-                    if symbol in models:  # Only process symbols with trained models
+                    if symbol not in models or models[symbol] is None:
+                        continue
+
+                    # Default safe values — will be overwritten ONLY on successful fetch
+                    prediction = 0.5
+                    regime = "Unknown"
+                    price = 0.0
+                    current_rsi = 50.0
+                    current_adx = 25.0
+                    current_volatility = 15.0
+                    atr_val = 1.0
+                    decision = "Hold (No Data)"
+
+                    try:
+                        # === FETCH RECENT DATA (never uses very old data) ===
                         df = fetch_recent_data(symbol, CONFIG['LIVE_DATA_BARS'])
-                        sentiment = sentiments[symbol]
+                        
+                        sentiment = sentiments.get(symbol, 0.0)
                         df = calculate_indicators(df, sentiment)
-                        features = [
-                            'close', 'high', 'low', 'volume', 'MA20', 'MA50', 'RSI',
-                            'MACD', 'MACD_signal', 'OBV', 'VWAP', 'ATR', 'CMF', 'Close_ATR',
-                            'MA20_ATR', 'Return_1d', 'Return_5d', 'Volatility', 'BB_upper',
-                            'BB_lower', 'Stoch_K', 'Stoch_D', 'ADX', 'Sentiment'
-                        ]
+
+                        min_required = CONFIG['TIMESTEPS'] + 20
+                        if len(df) < min_required or df['close'].iloc[-1] <= 0:
+                            logger.warning(f"Insufficient or invalid live bars for {symbol} ({len(df)} bars)")
+                            # Still add a decision entry so email is never blank
+                            decisions.append({
+                                'symbol': symbol,
+                                'decision': "Hold (No Data)",
+                                'confidence': prediction,
+                                'rsi': current_rsi,
+                                'adx': current_adx,
+                                'volatility': current_volatility,
+                                'price': price,
+                                'owned': 0,
+                                'regime': regime
+                            })
+                            continue
+
+                        # === PREPROCESS AND PREDICT ===
+                        X_seq, _, _ = preprocess_data(
+                            df, CONFIG['TIMESTEPS'],
+                            inference_mode=True,
+                            inference_scaler=scalers[symbol],
+                            fit_scaler=False
+                        )
+                        recent_seq = X_seq[-1:].astype(np.float32)
+
                         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-                        if len(df) < 20:   # More tolerant for live data
-                            logger.warning(f"Insufficient data for {symbol} live prediction: {len(df)} bars")
-                            prediction = 0.5
-                            regime = "Unknown (insufficient data)"
-                            price = df['close'].iloc[-1] if not df.empty else 0.0
-                            current_rsi = 50.0
-                            current_adx = 0.0
-                            current_volatility = 0.0
-                            atr_val = 0.0
-                        else:
-                            X_seq, _, _ = preprocess_data(df, CONFIG['TIMESTEPS'], inference_mode=True, inference_scaler=scalers[symbol], fit_scaler=False)
-                            recent_seq = X_seq[-1:].astype(np.float32)
-                            model = models[symbol].to(device)
-                            model.eval()
-                            with torch.no_grad():
-                                pred_logit = model(torch.tensor(recent_seq).to(device))
-                                prediction = torch.sigmoid(pred_logit).cpu().item()
-                            
-                            # Get current regime from HMM
-                            hmm = hmms[symbol]
-                            X_latest_scaled = recent_seq.reshape(-1, recent_seq.shape[2])
-                            regime_id = hmm.predict(X_latest_scaled)[0]
-                            regime_names = ["Calm Bull", "Volatile Bull", "Calm Bear", "Volatile Bear"]
-                            regime = regime_names[regime_id]
-                            
-                            price = float(df['close'].iloc[-1])
-                            current_rsi = float(df['RSI'].iloc[-1])
-                            current_adx = float(df['ADX'].iloc[-1])
-                            current_volatility = float(df['Volatility'].iloc[-1])
-                            atr_val = float(df['ATR'].iloc[-1])
-                            logger.info(f"Live prediction for {symbol}: {prediction:.3f} | Regime: {regime} | Price=${price:.2f}")
+                        model = models[symbol].to(device)
+                        model.eval()
+                        with torch.no_grad():
+                            pred_logit = model(torch.tensor(recent_seq).to(device))
+                            prediction = torch.sigmoid(pred_logit).cpu().item()
 
-                        decision = "Hold"
-                        qty_owned = 0
-                        entry_time = None
-                        entry_price = 0.0
-                        time_held = 0
-                        position_obj = next((pos for pos in open_positions if pos.symbol == symbol), None)
-                        if position_obj:
-                            qty_owned = int(float(position_obj.qty))
-                            order_req = GetOrdersRequest(status=QueryOrderStatus.CLOSED, symbols=[symbol], side=OrderSide.BUY, limit=50)
-                            try:
-                                orders = trading_client.get_orders(order_req)
-                                filled_buy_orders = [o for o in orders if o.status == OrderStatus.FILLED and o.side == OrderSide.BUY]
-                                if filled_buy_orders:
-                                    latest_order = max(filled_buy_orders, key=lambda o: o.filled_at if o.filled_at else datetime.min.replace(tzinfo=timezone.utc))
-                                    entry_time = latest_order.filled_at if latest_order.filled_at else now
-                                else:
-                                    entry_time = now
-                            except Exception as e:
-                                logger.warning(f"Failed to fetch orders for {symbol}: {str(e)}")
+                        # Extract current technical values (guaranteed fresh)
+                        price = float(df['close'].iloc[-1])
+                        current_rsi = float(df['RSI'].iloc[-1])
+                        current_adx = float(df['ADX'].iloc[-1])
+                        current_volatility = float(df['Volatility'].iloc[-1])
+                        atr_val = float(df['ATR'].iloc[-1])
+
+                        regime = "Unknown"   # TODO: add HMM regime here later if desired
+
+                        logger.info(f"LIVE → {symbol} | Pred={prediction:.3f} | Price=${price:.2f} | "
+                                   f"RSI={current_rsi:.1f} | ADX={current_adx:.1f} | Vol={current_volatility:.2f} | ATR=${atr_val:.2f}")
+
+                    except Exception as e:
+                        logger.error(f"LIVE CYCLE SKIPPED for {symbol}: {str(e)}")
+                        # Still add a decision entry so email is never blank
+                        decisions.append({
+                            'symbol': symbol,
+                            'decision': "Hold (No Data)",
+                            'confidence': prediction,
+                            'rsi': current_rsi,
+                            'adx': current_adx,
+                            'volatility': current_volatility,
+                            'price': price,
+                            'owned': 0,
+                            'regime': regime
+                        })
+                        continue
+
+                    # ==================== DECISION LOGIC ====================
+                    qty_owned = 0
+                    entry_time = None
+                    entry_price = 0.0
+                    time_held = 0
+                    position_obj = next((pos for pos in open_positions if pos.symbol == symbol), None)
+                    if position_obj:
+                        qty_owned = int(float(position_obj.qty))
+                        order_req = GetOrdersRequest(status=QueryOrderStatus.CLOSED, symbols=[symbol], side=OrderSide.BUY, limit=50)
+                        try:
+                            orders = trading_client.get_orders(order_req)
+                            filled_buy_orders = [o for o in orders if o.status == OrderStatus.FILLED and o.side == OrderSide.BUY]
+                            if filled_buy_orders:
+                                latest_order = max(filled_buy_orders, key=lambda o: o.filled_at if o.filled_at else datetime.min.replace(tzinfo=timezone.utc))
+                                entry_time = latest_order.filled_at if latest_order.filled_at else now
+                            else:
                                 entry_time = now
-                            entry_price = float(position_obj.avg_entry_price)
-                            if entry_time:
-                                # everything has to be UTC or pandas will silently mix naive and aware timestamps
-                                # and then you get NaNs everywhere and lose your mind
-                                if entry_time.tzinfo is None:
-                                    entry_time = entry_time.replace(tzinfo=timezone.utc)
-                                else:
-                                    entry_time = entry_time.astimezone(timezone.utc)
-                            time_held = (now - entry_time).total_seconds() / 60 if entry_time else 0
-                            if time_held > 240 and prediction < 0.52:
-                                decision = "Sell (Time + Weak Signal)"
+                        except Exception as e:
+                            logger.warning(f"Failed to fetch orders for {symbol}: {str(e)}")
+                            entry_time = now
+                        entry_price = float(position_obj.avg_entry_price)
+                        if entry_time:
+                            if entry_time.tzinfo is None:
+                                entry_time = entry_time.replace(tzinfo=timezone.utc)
+                            else:
+                                entry_time = entry_time.astimezone(timezone.utc)
+                        time_held = (now - entry_time).total_seconds() / 60 if entry_time else 0
+                        if time_held > 240 and prediction < 0.52:
+                            decision = "Sell (Time + Weak Signal)"
 
-                        if current_volatility > CONFIG['MAX_VOLATILITY'] or current_adx < CONFIG['ADX_TREND_THRESHOLD']:
-                            decision = "Hold (Filters)"
-                        elif CONFIG['PREDICTION_THRESHOLD_SELL'] < prediction < CONFIG['CONFIDENCE_THRESHOLD']:
-                            decision = "Hold (Low Confidence)"
-                        elif prediction > max(CONFIG['PREDICTION_THRESHOLD_BUY'], CONFIG['CONFIDENCE_THRESHOLD']) and current_rsi < CONFIG['RSI_BUY_THRESHOLD']:
-                            decision = "Buy"
-                            if atr_val > 0:
-                                try:
-                                    risk_per_trade = cash * CONFIG['RISK_PERCENTAGE']
-                                    stop_loss_distance = atr_val * CONFIG['STOP_LOSS_ATR_MULTIPLIER']
-                                    if stop_loss_distance <= 0:
-                                        raise ValueError("Stop loss distance <= 0")
-                                    qty = max(1, int(risk_per_trade / stop_loss_distance))
+                    if current_volatility > CONFIG['MAX_VOLATILITY'] or current_adx < CONFIG['ADX_TREND_THRESHOLD']:
+                        decision = "Hold (Filters)"
+                    elif CONFIG['PREDICTION_THRESHOLD_SELL'] < prediction < CONFIG['CONFIDENCE_THRESHOLD']:
+                        decision = "Hold (Low Confidence)"
+                    elif prediction > max(CONFIG['PREDICTION_THRESHOLD_BUY'], CONFIG['CONFIDENCE_THRESHOLD']) and current_rsi < CONFIG['RSI_BUY_THRESHOLD']:
+                        decision = "Buy"
+                        if atr_val > 0:
+                            try:
+                                risk_per_trade = cash * CONFIG['RISK_PERCENTAGE']
+                                stop_loss_distance = atr_val * CONFIG['STOP_LOSS_ATR_MULTIPLIER']
+                                if stop_loss_distance <= 0:
+                                    raise ValueError("Stop loss distance <= 0")
+                                qty = max(1, int(risk_per_trade / stop_loss_distance))
+                                cost = qty * price + CONFIG['TRANSACTION_COST_PER_TRADE']
+                                if cost > cash:
+                                    qty = max(0, int((cash - CONFIG['TRANSACTION_COST_PER_TRADE']) / price))
                                     cost = qty * price + CONFIG['TRANSACTION_COST_PER_TRADE']
-                                    if cost > cash:
-                                        qty = max(0, int((cash - CONFIG['TRANSACTION_COST_PER_TRADE']) / price))
-                                        cost = qty * price + CONFIG['TRANSACTION_COST_PER_TRADE']
-                                    if qty > 0 and cost <= cash:
-                                        logger.info(f"Submitting buy order for {qty} shares of {symbol} at ${price:.2f}")
-                                        order = MarketOrderRequest(symbol=symbol, qty=qty, side=OrderSide.BUY, time_in_force=TimeInForce.GTC)
-                                        try:
-                                            trading_client.submit_order(order)
-                                            email_body = f"""
+                                if qty > 0 and cost <= cash:
+                                    logger.info(f"Submitting buy order for {qty} shares of {symbol} at ${price:.2f}")
+                                    order = MarketOrderRequest(symbol=symbol, qty=qty, side=OrderSide.BUY, time_in_force=TimeInForce.GTC)
+                                    try:
+                                        trading_client.submit_order(order)
+                                        email_body = f"""
 Bought {qty} shares of {symbol} at ${price:.2f}
 Prediction Confidence: {prediction:.3f}
 Regime: {regime}
@@ -1947,39 +2026,59 @@ ATR: {atr_val:.2f}
 Current Cash: ${cash - cost:.2f}
 Portfolio Value: ${portfolio_value:.2f}
 """
-                                            send_email(f"Trade Update: Bought {symbol}", email_body)
-                                        except Exception as e:
-                                            logger.error(f"Failed to submit buy order for {symbol}: {str(e)}")
-                                            decision = "Buy (Failed)"
-                                    else:
-                                        decision = "Hold (Qty=0 or Insufficient Cash)"
-                                except (ValueError, ZeroDivisionError) as e:
-                                    decision = "Hold (Calculation Error)"
-                            else:
-                                decision = "Hold (Invalid ATR)"
-                        elif qty_owned > 0 and time_held >= CONFIG['MIN_HOLDING_PERIOD_MINUTES']:
-                            max_price = max(float(position_obj.current_price) if position_obj else price, price)
-                            trailing_stop = max_price * (1 - CONFIG['TRAILING_STOP_PERCENTAGE'])
-                            stop_loss = entry_price - CONFIG['STOP_LOSS_ATR_MULTIPLIER'] * atr_val
-                            take_profit = entry_price + CONFIG['TAKE_PROFIT_ATR_MULTIPLIER'] * atr_val
-                            if price <= trailing_stop or price <= stop_loss or price >= take_profit or \
-                               (prediction < CONFIG['PREDICTION_THRESHOLD_SELL'] and current_rsi > CONFIG['RSI_SELL_THRESHOLD']) or \
-                               (prediction < 0.50 and current_rsi > 65) or \
-                               (prediction < CONFIG['CONFIDENCE_THRESHOLD'] - 0.05):
-                                decision = "Sell"
-                                # sell order code stays exactly here
+                                        send_email(f"Trade Update: Bought {symbol}", email_body)
+                                    except Exception as e:
+                                        logger.error(f"Failed to submit buy order for {symbol}: {str(e)}")
+                                        decision = "Buy (Failed)"
+                                else:
+                                    decision = "Hold (Qty=0 or Insufficient Cash)"
+                            except (ValueError, ZeroDivisionError) as e:
+                                decision = "Hold (Calculation Error)"
+                        else:
+                            decision = "Hold (Invalid ATR)"
+                    elif qty_owned > 0 and time_held >= CONFIG['MIN_HOLDING_PERIOD_MINUTES']:
+                        max_price = max(float(position_obj.current_price) if position_obj else price, price)
+                        trailing_stop = max_price * (1 - CONFIG['TRAILING_STOP_PERCENTAGE'])
+                        stop_loss = entry_price - CONFIG['STOP_LOSS_ATR_MULTIPLIER'] * atr_val
+                        take_profit = entry_price + CONFIG['TAKE_PROFIT_ATR_MULTIPLIER'] * atr_val
+                        if price <= trailing_stop or price <= stop_loss or price >= take_profit or \
+                           (prediction < CONFIG['PREDICTION_THRESHOLD_SELL'] and current_rsi > CONFIG['RSI_SELL_THRESHOLD']) or \
+                           (prediction < 0.50 and current_rsi > 65) or \
+                           (prediction < CONFIG['CONFIDENCE_THRESHOLD'] - 0.05):
+                            decision = "Sell"
+                            logger.info(f"Submitting SELL order for {qty_owned} shares of {symbol} at ${price:.2f}")
+                            order = MarketOrderRequest(
+                                symbol=symbol,
+                                qty=qty_owned,
+                                side=OrderSide.SELL,
+                                time_in_force=TimeInForce.GTC
+                            )
+                            try:
+                                trading_client.submit_order(order)
+                                email_body = f"""
+Sold {qty_owned} shares of {symbol} at ${price:.2f}
+Prediction: {prediction:.3f}
+Regime: {regime}
+RSI: {current_rsi:.2f}
+Reason: Stop/Take/Trailing or weak signal
+"""
+                                send_email(f"Trade Update: Sold {symbol}", email_body)
+                            except Exception as e:
+                                logger.error(f"Failed to submit sell order for {symbol}: {str(e)}")
+                                decision = "Sell (Failed)"
 
-                        decisions.append({
-                            'symbol': symbol,
-                            'decision': decision,
-                            'confidence': prediction,
-                            'rsi': current_rsi,
-                            'adx': current_adx,
-                            'volatility': current_volatility,
-                            'price': price,
-                            'owned': qty_owned,
-                            'regime': regime
-                        })
+                    decisions.append({
+                        'symbol': symbol,
+                        'decision': decision,
+                        'confidence': prediction,
+                        'rsi': current_rsi,
+                        'adx': current_adx,
+                        'volatility': current_volatility,
+                        'price': price,
+                        'owned': qty_owned,
+                        'regime': regime
+                    })
+
                 # Refresh account and positions after trades
                 account = trading_client.get_account()
                 portfolio_value = float(account.equity)
@@ -1991,25 +2090,27 @@ Portfolio Value: ${portfolio_value:.2f}
                     except APIError:
                         post_trade_owned[symbol] = 0
 
-                # Summarize decisions and send email (NOW INCLUDES REGIME)
+                # Summarize decisions and send email
                 summary_body = "Trading Summary:\n"
                 for dec in decisions:
                     owned_display = post_trade_owned.get(dec['symbol'], dec['owned'])
                     summary_body += f"{dec['symbol']}: {dec['decision']}, Regime: {dec.get('regime', 'Unknown')}, Confidence: {dec['confidence']:.3f}, RSI: {dec['rsi']:.2f}, ADX: {dec['adx']:.2f}, Volatility: {dec['volatility']:.2f}, Price: ${dec['price']:.2f}, Owned: {owned_display}\n"
                 summary_body += f"\nPortfolio Value: ${portfolio_value:.2f}\nNote: Actual trades are executed based on available cash and positions."
                 send_email("Trading Summary", summary_body)
+
             else:
                 next_open = clock.next_open
-                while datetime.now(timezone.utc) < next_open:  # Countdown loop when market closed
+                while datetime.now(timezone.utc) < next_open:
                     time_left = next_open - datetime.now(timezone.utc)
                     hours, remainder = divmod(time_left.total_seconds(), 3600)
                     minutes, seconds = divmod(remainder, 60)
                     timer_str = f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
-                    print(f"\r{Fore.RED}Time until market opens: {timer_str}{Style.RESET_ALL}", end='')  # Visual timer
+                    print(f"\r{Fore.RED}Time until market opens: {timer_str}{Style.RESET_ALL}", end='')
                     time.sleep(1)
-                print()  # New line after countdown
+                print()
 
     else:
+        # [backtest code remains unchanged - you can leave everything below exactly as-is]
         # === FIXED CACHED BACKTEST PATH (with indicators + correct indexing) ===
         all_models_cached = all(
             os.path.exists(os.path.join(CONFIG['MODEL_CACHE_DIR'], f"{symbol}_model_{CONFIG['MODEL_VERSION']}.pth")) and
@@ -2416,7 +2517,7 @@ if __name__ == "__main__":
     logger = logging.getLogger(__name__)
 
     # Optional account reset — only runs when you manually set the flag to True
-    cleanup_account_on_start()
+    cleanup_account_on_start(force_reset=args.reset)
 
     mp.set_start_method('spawn', force=True)  # Set early for CUDA multiprocessing safety
     main(backtest_only=args.backtest, force_train=args.force_train, debug=args.DEBUG)
